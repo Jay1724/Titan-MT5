@@ -17,11 +17,7 @@
     html, body, #root { height: 100%; }
     body {
       -webkit-tap-highlight-color: transparent;
-      background:
-        radial-gradient(circle at 15% -10%, rgba(10,132,255,0.30), transparent 45%),
-        radial-gradient(circle at 85% 0%, rgba(0,210,255,0.16), transparent 40%),
-        radial-gradient(circle at 50% 100%, rgba(10,90,255,0.14), transparent 50%),
-        #05070a;
+      background: #0a0a0a;
       background-attachment: fixed;
     }
     @keyframes spin    { to { transform: rotate(360deg); } }
@@ -30,9 +26,9 @@
     @keyframes slideIn { from{opacity:0;transform:translateX(-8px)} to{opacity:1;transform:translateX(0)} }
     ::-webkit-scrollbar { width: 4px; }
     ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: rgba(10,132,255,0.35); border-radius: 2px; }
+    ::-webkit-scrollbar-thumb { background: rgba(37,99,235,0.35); border-radius: 2px; }
     input[type=range] { -webkit-appearance: none; appearance: none; height: 4px; border-radius: 2px; outline: none; }
-    input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #fff; cursor: pointer; box-shadow: 0 0 0 4px rgba(10,132,255,0.25), 0 2px 6px rgba(0,0,0,0.4); }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: #fff; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.4); }
     select { -webkit-appearance: none; appearance: none; }
   </style>
 </head>
@@ -46,9 +42,9 @@
     const POLL_MS = 4000;
 
     // ── Electric blue / Apple-glass design tokens ───────────────────────────────
-    const ACCENT       = "#0A84FF";  // primary electric blue
-    const ACCENT_DEEP  = "#0050D6";  // gradient / pressed state
-    const ACCENT_GLOW  = "#64D2FF";  // highlight glow
+    const ACCENT       = "#2563EB";  // primary accent (muted blue)
+    const ACCENT_DEEP  = "#1E40AF";  // pressed / border state
+    const ACCENT_GLOW  = "#5B8DEF";  // highlight text tone (no longer used for glow)
     const DANGER        = "#ff4d6d";
     const WARN          = "#f5c518";
 
@@ -67,7 +63,7 @@
       backdropFilter: "blur(20px) saturate(180%)",
       WebkitBackdropFilter: "blur(20px) saturate(180%)",
       border: `1px solid rgba(${rgb},${alpha + 0.16})`,
-      boxShadow: `0 4px 20px rgba(${rgb},0.15), inset 0 1px 0 rgba(255,255,255,0.08)`,
+      boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
       ...extra,
     });
 
@@ -134,9 +130,8 @@
           </div>
           <div onClick={() => onChange(!value)} style={{
             width:48, height:26, borderRadius:13,
-            background: value ? `linear-gradient(135deg, ${ACCENT}, ${ACCENT_DEEP})` : "rgba(255,255,255,0.1)",
-            boxShadow: value ? `0 0 12px rgba(10,132,255,0.5)` : "none",
-            cursor:"pointer", position:"relative", transition:"all 0.25s", flexShrink:0,
+            background: value ? ACCENT : "rgba(255,255,255,0.1)",
+            cursor:"pointer", position:"relative", transition:"all 0.2s", flexShrink:0,
             border: "1px solid rgba(255,255,255,0.12)",
           }}>
             <div style={{ position:"absolute", top:2, left: value ? 24 : 2, width:20, height:20, borderRadius:"50%", background:"#fff", transition:"left 0.25s", boxShadow:"0 1px 3px rgba(0,0,0,0.4)" }} />
@@ -147,7 +142,7 @@
 
     function SafeModeBanner({ safeMode, onToggle }) {
       return (
-        <div style={glassTint(safeMode ? "10,132,255" : "255,77,109", safeMode ? 0.1 : 0.09, { borderRadius:18, padding:"14px 20px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:16 })}>
+        <div style={glassTint(safeMode ? "37,99,235" : "255,77,109", safeMode ? 0.1 : 0.09, { borderRadius:18, padding:"14px 20px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:16 })}>
           <div style={{ display:"flex", alignItems:"center", gap:12 }}>
             <div style={{ fontSize:22 }}>{safeMode ? "🛡" : "⚠️"}</div>
             <div>
@@ -156,7 +151,7 @@
             </div>
           </div>
           <button onClick={() => onToggle(!safeMode)} style={{
-            ...glassTint(safeMode ? "255,77,109" : "10,132,255", 0.14),
+            ...glassTint(safeMode ? "255,77,109" : "37,99,235", 0.14),
             borderRadius:12, padding:"8px 16px", cursor:"pointer", whiteSpace:"nowrap",
             color: safeMode ? DANGER : ACCENT_GLOW,
             fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:12,
@@ -185,7 +180,7 @@
             </div>
           </div>
           <div style={{ height:6, background:"rgba(255,255,255,0.08)", borderRadius:3, overflow:"hidden" }}>
-            <div style={{ height:"100%", width:`${Math.min(ratio*100,100)}%`, background:color, borderRadius:3, transition:"width 0.4s", boxShadow:`0 0 8px ${color}` }} />
+            <div style={{ height:"100%", width:`${Math.min(ratio*100,100)}%`, background:color, borderRadius:3, transition:"width 0.4s" }} />
           </div>
           {triggered && <div style={{ marginTop:10, fontSize:12, color:DANGER }}>🚨 Kill switch active — no new trades until tomorrow</div>}
         </div>
@@ -199,12 +194,12 @@
           <div style={{ fontSize:11, color:"#6b7280", letterSpacing:"0.12em", textTransform:"uppercase", fontFamily:"'Syne',sans-serif", marginBottom:12 }}>Loss Streak</div>
           <div style={{ display:"flex", gap:6, marginBottom:12 }}>
             {Array.from({ length: Math.max(maxAllowed,1) }).map((_,i) => (
-              <div key={i} style={{ flex:1, height:8, borderRadius:4, background: i < consecutive ? DANGER : "rgba(255,255,255,0.08)", boxShadow: i < consecutive ? `0 0 6px ${DANGER}` : "none", transition:"background 0.3s" }} />
+              <div key={i} style={{ flex:1, height:8, borderRadius:4, background: i < consecutive ? DANGER : "rgba(255,255,255,0.08)", transition:"background 0.3s" }} />
             ))}
           </div>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
             <div style={{ fontSize:13, color: isPaused ? DANGER : "#8a93a3" }}>{isPaused ? "⚠ Agent paused" : `${consecutive} / ${maxAllowed} losses`}</div>
-            {isPaused && <button onClick={onReset} style={{ ...glassTint("10,132,255", 0.14), borderRadius:10, padding:"5px 12px", color:ACCENT_GLOW, cursor:"pointer", fontFamily:"'Syne',sans-serif", fontWeight:600, fontSize:11 }}>Reset</button>}
+            {isPaused && <button onClick={onReset} style={{ ...glassTint("37,99,235", 0.14), borderRadius:10, padding:"5px 12px", color:ACCENT_GLOW, cursor:"pointer", fontFamily:"'Syne',sans-serif", fontWeight:600, fontSize:11 }}>Reset</button>}
           </div>
         </div>
       );
@@ -216,7 +211,7 @@
           <div style={{ fontSize:11, color:"#6b7280", letterSpacing:"0.12em", textTransform:"uppercase", fontFamily:"'Syne',sans-serif", marginBottom:12 }}>Win Streak</div>
           <div style={{ display:"flex", gap:6, marginBottom:12 }}>
             {Array.from({ length: Math.max(Math.min(streak,10),1) }).map((_,i) => (
-              <div key={i} style={{ flex:1, height:8, borderRadius:4, background: i < streak ? ACCENT_GLOW : "rgba(255,255,255,0.08)", boxShadow: i < streak ? `0 0 6px ${ACCENT_GLOW}` : "none" }} />
+              <div key={i} style={{ flex:1, height:8, borderRadius:4, background: i < streak ? ACCENT_GLOW : "rgba(255,255,255,0.08)" }} />
             ))}
           </div>
           <div style={{ fontSize:13, color: streak > 0 ? ACCENT_GLOW : "#8a93a3" }}>{streak > 0 ? `🔥 ${streak} win${streak===1?"":"s"} in a row` : "No active streak"}</div>
@@ -266,7 +261,7 @@
         setExecuting(null);
       };
       const sentColor = { BULLISH: ACCENT_GLOW, BEARISH: DANGER, NEUTRAL: WARN };
-      const sentRgb   = { BULLISH: "10,132,255", BEARISH: "255,77,109", NEUTRAL: "245,197,24" };
+      const sentRgb   = { BULLISH: "37,99,235", BEARISH: "255,77,109", NEUTRAL: "245,197,24" };
 
       return (
         <div style={glass({ borderRadius:20, padding:24, display:"flex", flexDirection:"column", gap:16 })}>
@@ -275,20 +270,19 @@
               <div style={{ fontFamily:"'Syne',sans-serif", fontSize:13, color:"#8a93a3", letterSpacing:"0.12em", textTransform:"uppercase" }}>AI Agent</div>
               <div style={{ fontFamily:"'Syne',sans-serif", fontSize:18, fontWeight:700, color:"#fff", marginTop:2 }}>Market Analysis</div>
             </div>
-            <div style={{ display:"flex", alignItems:"center", gap:10, ...glassTint(autoExecute ? "10,132,255" : "255,255,255", autoExecute ? 0.1 : 0.04), borderRadius:12, padding:"8px 14px" }}>
+            <div style={{ display:"flex", alignItems:"center", gap:10, ...glassTint(autoExecute ? "37,99,235" : "255,255,255", autoExecute ? 0.1 : 0.04), borderRadius:12, padding:"8px 14px" }}>
               <div>
                 <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:600, fontSize:12, color: autoExecute ? ACCENT_GLOW : "#8a93a3" }}>Auto-Execute</div>
                 <div style={{ fontSize:10, color:"#556", marginTop:1 }}>{autoExecute ? `fires at ${config.minConfidence}%+` : "manual only"}</div>
               </div>
-              <div onClick={() => onAutoExecuteChange(!autoExecute)} style={{ width:40, height:22, borderRadius:11, background: autoExecute ? `linear-gradient(135deg, ${ACCENT}, ${ACCENT_DEEP})` : "rgba(255,255,255,0.1)", cursor:"pointer", position:"relative", transition:"all 0.25s", flexShrink:0, border:"1px solid rgba(255,255,255,0.12)" }}>
+              <div onClick={() => onAutoExecuteChange(!autoExecute)} style={{ width:40, height:22, borderRadius:11, background: autoExecute ? ACCENT : "rgba(255,255,255,0.1)", cursor:"pointer", position:"relative", transition:"all 0.2s", flexShrink:0, border:"1px solid rgba(255,255,255,0.12)" }}>
                 <div style={{ position:"absolute", top:2, left: autoExecute ? 20 : 2, width:18, height:18, borderRadius:"50%", background:"#fff", transition:"left 0.25s", boxShadow:"0 1px 3px rgba(0,0,0,0.4)" }} />
               </div>
             </div>
             <button onClick={runAnalysis} disabled={thinking||blocked} style={{
-              background: blocked ? "rgba(255,77,109,0.1)" : thinking ? "rgba(10,132,255,0.12)" : `linear-gradient(135deg, ${ACCENT}, ${ACCENT_DEEP})`,
+              background: blocked ? "rgba(255,77,109,0.1)" : thinking ? "rgba(37,99,235,0.12)" : ACCENT,
               backdropFilter: blocked || thinking ? "blur(16px)" : "none",
-              border: blocked ? "1px solid rgba(255,77,109,0.25)" : thinking ? "1px solid rgba(10,132,255,0.3)" : "1px solid rgba(255,255,255,0.18)",
-              boxShadow: !blocked && !thinking ? "0 4px 20px rgba(10,132,255,0.4), inset 0 1px 0 rgba(255,255,255,0.25)" : "none",
+              border: blocked ? "1px solid rgba(255,77,109,0.25)" : thinking ? "1px solid rgba(37,99,235,0.3)" : "1px solid rgba(255,255,255,0.12)",
               borderRadius:12, padding:"10px 20px", color: blocked ? "#ff4d6d88" : thinking ? ACCENT_GLOW : "#fff",
               fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:13, cursor: blocked||thinking ? "not-allowed" : "pointer",
               display:"flex", alignItems:"center", gap:8, whiteSpace:"nowrap",
@@ -297,7 +291,7 @@
             </button>
           </div>
 
-          {autoExecute && !blocked && <div style={glassTint("10,132,255", 0.08, { borderRadius:12, padding:"10px 14px", fontSize:12, color:ACCENT_GLOW })}>⚡ Auto-execute ON — signals ≥{config.minConfidence}% confidence will trade automatically</div>}
+          {autoExecute && !blocked && <div style={glassTint("37,99,235", 0.08, { borderRadius:12, padding:"10px 14px", fontSize:12, color:ACCENT_GLOW })}>⚡ Auto-execute ON — signals ≥{config.minConfidence}% confidence will trade automatically</div>}
           {!connected && <div style={glassTint("255,77,109", 0.1, { borderRadius:12, padding:12, color:DANGER, fontSize:13 })}>⛔ Can't reach the MT5 bridge. Check the Bridge URL in Config and that mt5_bridge.py is running.</div>}
           {connected && blocked && <div style={glassTint("255,77,109", 0.1, { borderRadius:12, padding:12, color:DANGER, fontSize:13 })}>{killSwitchActive ? "🚨 Daily loss limit reached — blocked until tomorrow." : "⚠ Paused after consecutive losses — reset counter to resume."}</div>}
           {error  && <div style={glassTint("255,77,109", 0.12, { borderRadius:12, padding:12, color:DANGER, fontSize:13 })}>{error}</div>}
@@ -306,7 +300,7 @@
             <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
               {["Fetching price action…","Evaluating momentum…","Computing risk/reward…"].map((t,i) => (
                 <div key={i} style={{ display:"flex", alignItems:"center", gap:10, color:"#8a93a3", fontSize:13 }}>
-                  <span style={{ width:6, height:6, borderRadius:"50%", background:ACCENT, display:"inline-block", animation:"pulse 1s infinite", boxShadow:`0 0 6px ${ACCENT}` }}/>{t}
+                  <span style={{ width:6, height:6, borderRadius:"50%", background:ACCENT, display:"inline-block", animation:"pulse 1s infinite" }}/>{t}
                 </div>
               ))}
             </div>
@@ -356,7 +350,7 @@
                     </div>
                     {sig.action !== "HOLD" ? (
                       <button onClick={() => handleExecute(sig,i)} disabled={executing===i||blocked} style={{
-                        ...glassTint(sig.action==="BUY" ? "10,132,255" : "255,77,109", executing===i ? 0.03 : 0.16),
+                        ...glassTint(sig.action==="BUY" ? "37,99,235" : "255,77,109", executing===i ? 0.03 : 0.16),
                         borderRadius:12, padding:"10px 18px",
                         color: executing===i?"#556":sig.action==="BUY"?ACCENT_GLOW:DANGER,
                         fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:13, cursor: executing===i||blocked?"not-allowed":"pointer",
@@ -383,7 +377,7 @@
       const fmt = goal.currency === "ZAR" ? fmtZar : fmtUsd;
       const reached = pct >= 100;
       return (
-        <div style={glass({ borderRadius:18, padding:20, ...(reached ? { border: `1px solid rgba(10,132,255,0.4)` } : {}) })}>
+        <div style={glass({ borderRadius:18, padding:20, ...(reached ? { border: `1px solid rgba(37,99,235,0.4)` } : {}) })}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:10, marginBottom:14 }}>
             <div>
               <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:15 }}>{goal.name}</div>
@@ -392,7 +386,7 @@
             <button onClick={() => onDelete(goal.id)} style={{ background:"transparent", border:"none", color:"#556", cursor:"pointer", fontSize:16, padding:4 }}>✕</button>
           </div>
           <div style={{ height:8, background:"rgba(255,255,255,0.08)", borderRadius:4, overflow:"hidden", marginBottom:10 }}>
-            <div style={{ height:"100%", width:`${pct}%`, background: reached ? `linear-gradient(90deg, ${ACCENT}, ${ACCENT_GLOW})` : `linear-gradient(90deg, ${ACCENT_DEEP}, ${ACCENT})`, borderRadius:4, transition:"width 0.5s", boxShadow:`0 0 10px rgba(10,132,255,0.5)` }} />
+            <div style={{ height:"100%", width:`${pct}%`, background: reached ? ACCENT_GLOW : ACCENT, borderRadius:4, transition:"width 0.5s" }} />
           </div>
           <div style={{ display:"flex", justifyContent:"space-between", fontSize:12 }}>
             <span style={{ color: reached ? ACCENT_GLOW : "#8a93a3", fontWeight:700 }}>{reached ? "🎉 Goal reached!" : `${pct.toFixed(1)}% there`}</span>
@@ -427,8 +421,8 @@
               </select>
             </div>
             <button onClick={submit} style={{
-              background:`linear-gradient(135deg, ${ACCENT}, ${ACCENT_DEEP})`, border:"1px solid rgba(255,255,255,0.18)",
-              boxShadow:"0 4px 16px rgba(10,132,255,0.4)", borderRadius:10, padding:"10px 18px", cursor:"pointer",
+              background: ACCENT, border:"1px solid rgba(255,255,255,0.12)",
+              borderRadius:10, padding:"10px 18px", cursor:"pointer",
               color:"#fff", fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:13,
             }}>+ Add Goal</button>
           </div>
@@ -599,7 +593,7 @@
           {/* Header */}
           <div style={{ ...glass({ borderRadius:0 }), borderLeft:"none", borderRight:"none", borderTop:"none", padding:"16px 20px", display:"flex", alignItems:"center", justifyContent:"space-between", position:"sticky", top:0, zIndex:100 }}>
             <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-              <div style={{ width:34, height:34, borderRadius:10, background:`linear-gradient(135deg, ${ACCENT}, ${ACCENT_DEEP})`, boxShadow:"0 2px 12px rgba(10,132,255,0.5), inset 0 1px 0 rgba(255,255,255,0.3)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:15 }}>⚡</div>
+              <div style={{ width:34, height:34, borderRadius:10, background: ACCENT, display:"flex", alignItems:"center", justifyContent:"center", fontSize:15 }}>⚡</div>
               <div>
                 <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:800, fontSize:15 }}>TITAN<span style={{ color:ACCENT_GLOW }}>·MT5</span></div>
                 <div style={{ fontSize:9, color:"#556", letterSpacing:"0.1em" }}>AI TRADING AGENT</div>
@@ -608,9 +602,8 @@
             <div style={{ display:"flex", gap:4 }}>
               {tabs.map(t => (
                 <button key={t} onClick={() => setActiveTab(t)} style={{
-                  background: activeTab===t ? "rgba(10,132,255,0.16)" : "transparent",
-                  border: activeTab===t ? "1px solid rgba(10,132,255,0.35)" : "1px solid transparent",
-                  boxShadow: activeTab===t ? "0 0 12px rgba(10,132,255,0.25)" : "none",
+                  background: activeTab===t ? "rgba(37,99,235,0.16)" : "transparent",
+                  border: activeTab===t ? "1px solid rgba(37,99,235,0.35)" : "1px solid transparent",
                   borderRadius:10, padding:"6px 14px", color: activeTab===t?ACCENT_GLOW:"#6b7280",
                   fontFamily:"'Syne',sans-serif", fontWeight:600, fontSize:11, cursor:"pointer", textTransform:"capitalize",
                   transition:"all 0.2s",
@@ -619,14 +612,14 @@
             </div>
             <div style={{ display:"flex", alignItems:"center", gap:8 }}>
               <div style={{
-                ...glassTint(config.safeMode ? "10,132,255" : "255,77,109", 0.12),
+                ...glassTint(config.safeMode ? "37,99,235" : "255,77,109", 0.12),
                 borderRadius:20, padding:"3px 10px", fontSize:10,
                 color: config.safeMode?ACCENT_GLOW:DANGER,
                 fontFamily:"'Syne',sans-serif", fontWeight:700,
               }}>
                 {config.safeMode?"🛡 SAFE":"⚡ DYN"}
               </div>
-              <div style={{ width:8, height:8, borderRadius:"50%", background: !connected ? "#556" : killSwitchActive?DANGER:ACCENT, boxShadow: connected ? `0 0 8px ${killSwitchActive?DANGER:ACCENT}` : "none" }} title={connected ? "Bridge connected" : "Bridge offline"} />
+              <div style={{ width:8, height:8, borderRadius:"50%", background: !connected ? "#556" : killSwitchActive?DANGER:ACCENT }} title={connected ? "Bridge connected" : "Bridge offline"} />
             </div>
           </div>
 
@@ -716,7 +709,7 @@
             {/* GOALS */}
             {activeTab==="goals" && (
               <div style={{ display:"flex", flexDirection:"column", gap:16, animation:"fadeIn 0.3s both" }}>
-                <div style={glassTint("10,132,255", 0.08, { borderRadius:16, padding:"14px 18px", fontSize:13, color:"#b8c0cc" })}>
+                <div style={glassTint("37,99,235", 0.08, { borderRadius:16, padding:"14px 18px", fontSize:13, color:"#b8c0cc" })}>
                   🎯 Set a target and trade toward it. Progress tracks your current MT5 balance against each goal.
                 </div>
                 {goals.length === 0 && (
@@ -739,7 +732,7 @@
                   <div style={{ marginTop:14 }}>
                     <label style={{ fontSize:11, color:"#6b7280", letterSpacing:"0.1em", textTransform:"uppercase", display:"block", marginBottom:8 }}>Fixed lot size</label>
                     <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-                      <input type="range" min={0.01} max={1.0} step={0.01} value={config.fixedLots} onChange={e => pushConfig({fixedLots:parseFloat(e.target.value)})} style={{ flex:1, accentColor:ACCENT, background:"rgba(10,132,255,0.2)" }} />
+                      <input type="range" min={0.01} max={1.0} step={0.01} value={config.fixedLots} onChange={e => pushConfig({fixedLots:parseFloat(e.target.value)})} style={{ flex:1, accentColor:ACCENT, background:"rgba(37,99,235,0.2)" }} />
                       <span style={{ minWidth:60, color:ACCENT_GLOW, fontFamily:"'Syne',sans-serif", fontWeight:700 }}>{config.fixedLots} lots</span>
                     </div>
                   </div>
@@ -764,7 +757,7 @@
                     <div key={f.key} style={{ marginBottom:16 }}>
                       <label style={{ fontSize:11, color:"#6b7280", letterSpacing:"0.1em", textTransform:"uppercase", display:"block", marginBottom:8 }}>{f.label}</label>
                       <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-                        <input type="range" min={f.min} max={f.max} step={f.step} value={config[f.key]} onChange={e => pushConfig({[f.key]:parseFloat(e.target.value)})} style={{ flex:1, accentColor:ACCENT, background:"rgba(10,132,255,0.15)" }} />
+                        <input type="range" min={f.min} max={f.max} step={f.step} value={config[f.key]} onChange={e => pushConfig({[f.key]:parseFloat(e.target.value)})} style={{ flex:1, accentColor:ACCENT, background:"rgba(37,99,235,0.15)" }} />
                         <span style={{ minWidth:60, color:ACCENT_GLOW, fontFamily:"'Syne',sans-serif", fontWeight:700 }}>{config[f.key]}{f.suffix}</span>
                       </div>
                     </div>
@@ -777,9 +770,8 @@
                   <div style={{ display:"flex", gap:10 }}>
                     <input value={bridgeInput} onChange={e => { setBridgeInput(e.target.value); setBridgeSaved(false); }} style={{ flex:1, background:"rgba(255,255,255,0.06)", backdropFilter:"blur(12px)", border:`1px solid ${bridgeSaved?"rgba(255,255,255,0.14)":"rgba(245,197,24,0.4)"}`, borderRadius:10, padding:"10px 14px", color:ACCENT_GLOW, fontFamily:"'JetBrains Mono',monospace", fontSize:13 }} />
                     <button onClick={saveBridgeUrl} disabled={bridgeSaved} style={{
-                      background: bridgeSaved?"rgba(255,255,255,0.05)":`linear-gradient(135deg, ${ACCENT}, ${ACCENT_DEEP})`,
-                      border: bridgeSaved?"1px solid rgba(255,255,255,0.1)":"1px solid rgba(255,255,255,0.18)",
-                      boxShadow: bridgeSaved ? "none" : "0 4px 16px rgba(10,132,255,0.4)",
+                      background: bridgeSaved?"rgba(255,255,255,0.05)":ACCENT,
+                      border: bridgeSaved?"1px solid rgba(255,255,255,0.1)":"1px solid rgba(255,255,255,0.12)",
                       borderRadius:10, padding:"10px 18px", cursor: bridgeSaved?"default":"pointer", color: bridgeSaved?"#556":"#fff", fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:13, whiteSpace:"nowrap",
                     }}>
                       {bridgeSaved?"✓ Saved":"Save URL"}
