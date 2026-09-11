@@ -24,9 +24,10 @@ Starts on http://localhost:8000
 
 import os
 import json
+import sqlite3
 from datetime import datetime, date
 from typing import Optional
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, closing
 
 import MetaTrader5 as mt5
 import anthropic
@@ -85,10 +86,139 @@ SESSION = {
     "opening_balance": None,     # Captured on first trade of the day
 }
 
+# ── Trade journal (persists across restarts, survives even manual MT5 trades) ──
+
+JOURNAL_DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "titan_journal.db")
+
+
+def journal_db():
+    conn = sqlite3.connect(JOURNAL_DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def init_journal_db():
+    with closing(journal_db()) as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS trades (
+                ticket          INTEGER PRIMARY KEY,
+                symbol          TEXT,
+                action          TEXT,
+                lots            REAL,
+                open_price      REAL,
+                close_price     REAL,
+                sl              REAL,
+                tp              REAL,
+                opened_at       TEXT,
+                closed_at       TEXT,
+                profit          REAL,
+                status          TEXT,
+                source          TEXT,
+                confidence      INTEGER,
+                technical_bias  TEXT,
+                trend           TEXT,
+                rsi14           REAL,
+                safe_mode       INTEGER,
+                comment         TEXT
+            )
+        """)
+        conn.commit()
+
+
+def journal_record_open(ticket, symbol, action, lots, open_price, sl, tp,
+                         source="manual", confidence=None, technical_bias=None,
+                         trend=None, rsi14=None, comment=None):
+    with closing(journal_db()) as conn:
+        conn.execute("""
+            INSERT OR IGNORE INTO trades
+                (ticket, symbol, action, lots, open_price, sl, tp, opened_at,
+                 status, source, confidence, technical_bias, trend, rsi14, safe_mode, comment)
+            VALUES (?,?,?,?,?,?,?,?, 'open', ?,?,?,?,?,?,?)
+        """, (ticket, symbol, action, lots, open_price, sl, tp, datetime.now().isoformat(),
+              source, confidence, technical_bias, trend, rsi14, int(RISK_CONFIG["safe_mode"]), comment))
+        conn.commit()
+
+
+def journal_record_close(ticket, close_price, profit):
+    with closing(journal_db()) as conn:
+        cur = conn.execute("""
+            UPDATE trades SET close_price=?, closed_at=?, profit=?, status='closed'
+            WHERE ticket=?
+        """, (close_price, datetime.now().isoformat(), profit, ticket))
+        conn.commit()
+        return cur.rowcount > 0
+
+
+def journal_sync_from_history():
+    """Backfill closed trades placed outside the bridge (e.g. manually in MT5)."""
+    try:
+        deals = mt5.history_deals_get(datetime(2020, 1, 1), datetime.now())
+    except Exception:
+        return
+    if not deals:
+        return
+    with closing(journal_db()) as conn:
+        for d in deals:
+            if d.symbol not in WATCHED_SYMBOLS or d.entry != mt5.DEAL_ENTRY_OUT:
+                continue
+            existing = conn.execute("SELECT ticket FROM trades WHERE ticket=?", (d.position_id,)).fetchone()
+            if existing:
+                continue
+            action = "BUY" if d.type == mt5.DEAL_TYPE_SELL else "SELL"  # closing deal is opposite side
+            conn.execute("""
+                INSERT OR IGNORE INTO trades
+                    (ticket, symbol, action, lots, close_price, closed_at, profit, status, source, comment)
+                VALUES (?,?,?,?,?,?,?, 'closed', 'external', ?)
+            """, (d.position_id, d.symbol, action, d.volume, d.price,
+                  datetime.fromtimestamp(d.time).isoformat(), d.profit, d.comment))
+        conn.commit()
+
+
+def journal_get_entries(limit=200):
+    with closing(journal_db()) as conn:
+        rows = conn.execute("""
+            SELECT * FROM trades ORDER BY COALESCE(closed_at, opened_at) DESC LIMIT ?
+        """, (limit,)).fetchall()
+        return [dict(r) for r in rows]
+
+
+def journal_get_stats():
+    with closing(journal_db()) as conn:
+        rows = conn.execute("""
+            SELECT profit, closed_at FROM trades WHERE status='closed' ORDER BY closed_at ASC
+        """).fetchall()
+    closed = [dict(r) for r in rows]
+    total = len(closed)
+    wins   = [t["profit"] for t in closed if t["profit"] and t["profit"] > 0]
+    losses = [t["profit"] for t in closed if t["profit"] and t["profit"] < 0]
+    total_profit = sum(t["profit"] or 0 for t in closed)
+    gross_win  = sum(wins)
+    gross_loss = abs(sum(losses))
+    equity = 0.0
+    equity_curve = []
+    for t in closed:
+        equity += t["profit"] or 0
+        equity_curve.append(round(equity, 2))
+    return {
+        "total_trades":   total,
+        "wins":           len(wins),
+        "losses":         len(losses),
+        "win_rate_pct":   round(len(wins) / total * 100, 1) if total else 0,
+        "total_profit":   round(total_profit, 2),
+        "avg_win":        round(sum(wins) / len(wins), 2) if wins else 0,
+        "avg_loss":       round(sum(losses) / len(losses), 2) if losses else 0,
+        "expectancy":     round(total_profit / total, 2) if total else 0,
+        "profit_factor":  round(gross_win / gross_loss, 2) if gross_loss else (gross_win if gross_win else 0),
+        "best_trade":     round(max((t["profit"] or 0 for t in closed), default=0), 2),
+        "worst_trade":    round(min((t["profit"] or 0 for t in closed), default=0), 2),
+        "equity_curve":   equity_curve,
+    }
+
 # ── MT5 Lifespan ──────────────────────────────────────────────────────────────
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    init_journal_db()
     print("🔌 Connecting to MT5...")
     if not mt5.initialize(login=MT5_LOGIN, password=MT5_PASSWORD, server=MT5_SERVER):
         print(f"⚠  MT5 init failed: {mt5.last_error()} — running in mock/demo mode")
@@ -97,6 +227,11 @@ async def lifespan(app: FastAPI):
         SESSION["opening_balance"] = info.balance
         print(f"✅ MT5 connected | Account: {info.login} | Balance: {info.currency} {info.balance:,.2f}")
         print(f"🛡  Safe Mode: {'ON — fixed 0.01 lots' if RISK_CONFIG['safe_mode'] else 'OFF — dynamic sizing'}")
+        try:
+            journal_sync_from_history()
+            print("📓 Trade journal synced with MT5 history")
+        except Exception as e:
+            print(f"⚠  Journal sync failed: {e}")
     yield
     mt5.shutdown()
     print("🔌 MT5 disconnected")
@@ -121,6 +256,13 @@ class TradeRequest(BaseModel):
     sl: Optional[float] = None
     tp: Optional[float] = None
     comment: str = "TITAN-AI"
+    # Journal metadata — set by the agent (auto-execute or Execute button) so
+    # the journal can record why the trade was taken. Absent for manual trades.
+    source: str = "manual"
+    confidence: Optional[int] = None
+    technical_bias: Optional[str] = None
+    trend: Optional[str] = None
+    rsi14: Optional[float] = None
 
 class ConfigUpdate(BaseModel):
     safe_mode: Optional[bool] = None
@@ -456,6 +598,16 @@ def execute_trade(req: TradeRequest) -> dict:
 
     SESSION["trades_today"] += 1
 
+    try:
+        journal_record_open(
+            ticket=result.order, symbol=req.symbol, action=req.action, lots=lots,
+            open_price=result.price, sl=sl, tp=tp,
+            source=req.source, confidence=req.confidence, technical_bias=req.technical_bias,
+            trend=req.trend, rsi14=req.rsi14, comment=req.comment,
+        )
+    except Exception as e:
+        print(f"⚠  Journal write (open) failed: {e}")
+
     return {
         "ticket": result.order,
         "symbol": req.symbol,
@@ -502,6 +654,24 @@ def close_position(ticket: int) -> dict:
         raise HTTPException(400, f"Close failed: {result.comment}")
 
     record_trade_result(position.profit)
+
+    try:
+        if not journal_record_close(ticket, close_price, position.profit):
+            # Position wasn't tracked (opened outside the bridge) — backfill a closed row.
+            action = "BUY" if position.type == mt5.ORDER_TYPE_BUY else "SELL"
+            with closing(journal_db()) as conn:
+                conn.execute("""
+                    INSERT OR IGNORE INTO trades
+                        (ticket, symbol, action, lots, open_price, close_price, sl, tp,
+                         opened_at, closed_at, profit, status, source, comment)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?, 'closed', 'external', ?)
+                """, (ticket, position.symbol, action, position.volume, position.price_open,
+                      close_price, position.sl, position.tp,
+                      datetime.fromtimestamp(position.time).isoformat(), datetime.now().isoformat(),
+                      position.profit, position.comment))
+                conn.commit()
+    except Exception as e:
+        print(f"⚠  Journal write (close) failed: {e}")
 
     return {
         "closed_ticket": ticket,
@@ -655,6 +825,11 @@ Respond ONLY in JSON, no markdown, no preamble:
                         sl=sig.get("estimatedSL") or None,
                         tp=sig.get("estimatedTP") or None,
                         comment=f"TITAN-AI-{sig['confidence']}%",
+                        source="agent",
+                        confidence=sig.get("confidence"),
+                        technical_bias=sig.get("technicalBias"),
+                        trend=sig.get("trend"),
+                        rsi14=sig.get("rsi14"),
                     )
                     try:
                         trade_result  = execute_trade(req)
@@ -781,6 +956,26 @@ def trade_history(limit: int = 50):
         for d in sorted(deals, key=lambda x: x.time, reverse=True)[:limit]
         if d.symbol in WATCHED_SYMBOLS
     ]
+
+@app.get("/journal")
+def journal(limit: int = 200):
+    """
+    Persistent trade journal — every trade opened/closed through this bridge,
+    plus any closed externally (e.g. manually in the MT5 terminal), backfilled
+    from MT5 history on startup.
+    """
+    return journal_get_entries(limit=limit)
+
+@app.get("/journal/stats")
+def journal_stats():
+    """Win rate, expectancy, profit factor, and an equity curve over closed trades."""
+    return journal_get_stats()
+
+@app.post("/journal/sync")
+def journal_sync():
+    """Manually re-sync the journal against MT5 history (also runs on startup)."""
+    journal_sync_from_history()
+    return {"synced": True}
 
 # ── Entry point ────────────────────────────────────────────────────────────────
 

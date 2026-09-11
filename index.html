@@ -441,6 +441,106 @@
       );
     }
 
+    // ── Trade Journal ────────────────────────────────────────────────────────
+    function EquityCurve({ points }) {
+      if (!points || points.length < 2) {
+        return <div style={{ textAlign:"center", padding:"24px 0", color:"#556", fontSize:12 }}>Not enough closed trades yet for an equity curve</div>;
+      }
+      const min = Math.min(0, ...points);
+      const max = Math.max(0, ...points);
+      const range = (max - min) || 1;
+      const w = 100, h = 40;
+      const step = w / (points.length - 1);
+      const coords = points.map((p, i) => `${(i*step).toFixed(2)},${(h - ((p - min) / range) * h).toFixed(2)}`);
+      const last = points[points.length - 1];
+      const color = last >= 0 ? ACCENT_GLOW : DANGER;
+      return (
+        <svg width="100%" height="80" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ display:"block" }}>
+          <polyline points={coords.join(" ")} fill="none" stroke={color} strokeWidth="1" vectorEffect="non-scaling-stroke" />
+        </svg>
+      );
+    }
+
+    function JournalTab({ bridgeUrl, connected, usdZarRate }) {
+      const [stats, setStats] = useState(null);
+      const [entries, setEntries] = useState([]);
+      const [loading, setLoading] = useState(false);
+
+      const load = useCallback(() => {
+        if (!connected) return;
+        setLoading(true);
+        Promise.all([
+          bridgeFetch(bridgeUrl, "/journal/stats"),
+          bridgeFetch(bridgeUrl, "/journal?limit=100"),
+        ]).then(([s, e]) => { setStats(s); setEntries(e); }).finally(() => setLoading(false));
+      }, [bridgeUrl, connected]);
+
+      useEffect(() => { load(); }, [load]);
+
+      if (!connected) {
+        return <div style={glassTint("255,77,109", 0.1, { borderRadius:16, padding:"14px 18px", fontSize:13, color:DANGER })}>⛔ Connect to the bridge to load the trade journal.</div>;
+      }
+
+      const SC = (label, value, color="#fff", sub=null) => (
+        <div style={glass({ borderRadius:16, padding:"14px 16px" })}>
+          <div style={{ fontSize:10, color:"#6b7280", letterSpacing:"0.1em", textTransform:"uppercase", fontFamily:"'Syne',sans-serif" }}>{label}</div>
+          <div style={{ fontSize:20, fontWeight:800, color, fontFamily:"'Syne',sans-serif", marginTop:4 }}>{value}</div>
+          {sub && <div style={{ fontSize:10, color:"#556", marginTop:3 }}>{sub}</div>}
+        </div>
+      );
+
+      return (
+        <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+            <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:16 }}>Trade Journal</div>
+            <button onClick={load} disabled={loading} style={{ ...glassTint("37,99,235", 0.1), borderRadius:8, padding:"5px 12px", color:ACCENT_GLOW, cursor:"pointer", fontFamily:"'Syne',sans-serif", fontWeight:600, fontSize:11 }}>{loading ? "…" : "↻ Refresh"}</button>
+          </div>
+
+          {stats && (
+            <>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:10 }}>
+                {SC("Win Rate", `${stats.win_rate_pct}%`, stats.win_rate_pct >= 50 ? ACCENT_GLOW : DANGER, `${stats.wins}W / ${stats.losses}L`)}
+                {SC("Total Trades", stats.total_trades)}
+                {SC("Expectancy / Trade", fmtUsd(stats.expectancy, true), stats.expectancy >= 0 ? ACCENT_GLOW : DANGER, usdZarRate ? fmtZar(stats.expectancy * usdZarRate, true) : null)}
+                {SC("Profit Factor", stats.profit_factor)}
+                {SC("Best Trade", fmtUsd(stats.best_trade, true), ACCENT_GLOW)}
+                {SC("Worst Trade", fmtUsd(stats.worst_trade, true), DANGER)}
+              </div>
+              <div style={glass({ borderRadius:16, padding:16 })}>
+                <div style={{ fontSize:11, color:"#6b7280", letterSpacing:"0.1em", textTransform:"uppercase", fontFamily:"'Syne',sans-serif", marginBottom:8 }}>Equity Curve (closed trades)</div>
+                <EquityCurve points={stats.equity_curve} />
+              </div>
+            </>
+          )}
+
+          <div style={glass({ borderRadius:18, overflow:"hidden" })}>
+            <div style={{ padding:"14px 18px", borderBottom:"1px solid rgba(255,255,255,0.08)", fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:14 }}>Trade History</div>
+            {entries.length === 0 && <div style={{ padding:18, fontSize:12, color:"#556" }}>No trades recorded yet.</div>}
+            {entries.map(e => (
+              <div key={e.ticket} style={{ padding:"12px 18px", borderBottom:"1px solid rgba(255,255,255,0.05)", fontSize:12 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                    <span style={{ fontFamily:"'Syne',sans-serif", fontWeight:700 }}>{e.symbol}</span>
+                    <span style={{ color: e.action==="BUY"?ACCENT_GLOW:DANGER, fontWeight:700 }}>{e.action}</span>
+                    <span style={{
+                      fontSize:9, fontWeight:700, padding:"1px 6px", borderRadius:5, letterSpacing:"0.05em",
+                      color: e.source==="agent"?ACCENT_GLOW:e.source==="external"?WARN:"#8a93a3",
+                      background: e.source==="agent"?"rgba(37,99,235,0.12)":e.source==="external"?"rgba(245,197,24,0.1)":"rgba(255,255,255,0.06)",
+                    }}>{e.source}{e.confidence != null ? ` ${e.confidence}%` : ""}</span>
+                  </div>
+                  <span style={{ color: (e.profit||0)>=0?ACCENT_GLOW:DANGER, fontWeight:700 }}>{e.status==="open" ? "open" : `${e.profit>=0?"+":""}$${(e.profit||0).toFixed(2)}`}</span>
+                </div>
+                <div style={{ display:"flex", justifyContent:"space-between", marginTop:4, color:"#6b7280", fontSize:11, flexWrap:"wrap", gap:6 }}>
+                  <span>{e.lots} lots{e.open_price != null ? ` @ ${e.open_price}` : ""}{e.close_price != null ? ` → ${e.close_price}` : ""}</span>
+                  <span>{(e.closed_at || e.opened_at || "").replace("T", " ").slice(0, 16)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
     function App() {
       const [bridgeUrl, setBridgeUrl]     = useState(() => localStorage.getItem("titan_bridge_url") || DEFAULT_BRIDGE_URL);
       const [bridgeInput, setBridgeInput] = useState(bridgeUrl);
@@ -597,7 +697,7 @@
         </div>
       );
 
-      const tabs = ["dashboard","agent","goals","config"];
+      const tabs = ["dashboard","agent","journal","goals","config"];
 
       return (
         <div style={{ minHeight:"100vh", color:"#fff", fontFamily:"'JetBrains Mono',monospace", paddingBottom:60 }}>
@@ -714,6 +814,13 @@
               <div style={{ display:"flex", flexDirection:"column", gap:16, animation:"fadeIn 0.3s both" }}>
                 <SafeModeBanner safeMode={config.safeMode} onToggle={v => pushConfig({safeMode:v})} />
                 <AgentPanel bridgeUrl={bridgeUrl} connected={connected} config={{...config, dailyLoss:session.daily_loss_usd||0, consecutiveLosses:session.consecutive_losses||0}} onTrade={handleTrade} killSwitchActive={killSwitchActive} agentPaused={agentPaused} autoExecute={autoExecute} onAutoExecuteChange={setAutoExecute} />
+              </div>
+            )}
+
+            {/* JOURNAL */}
+            {activeTab==="journal" && (
+              <div style={{ animation:"fadeIn 0.3s both" }}>
+                <JournalTab bridgeUrl={bridgeUrl} connected={connected} usdZarRate={usdZarRate} />
               </div>
             )}
 
