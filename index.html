@@ -321,6 +321,17 @@
                       <div style={{ fontSize:11, fontWeight:700, marginTop:3, color: sig.action==="BUY"?ACCENT_GLOW:sig.action==="SELL"?DANGER:"#8a93a3" }}>{sig.action}</div>
                     </div>
                     <div style={{ flex:1, minWidth:160 }}>
+                      {sig.technicalBias && (
+                        <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:5, flexWrap:"wrap" }}>
+                          <span style={{
+                            fontSize:10, fontWeight:700, letterSpacing:"0.06em", padding:"2px 8px", borderRadius:6,
+                            color: sig.technicalBias==="BULLISH"?ACCENT_GLOW:sig.technicalBias==="BEARISH"?DANGER:"#8a93a3",
+                            background: sig.technicalBias==="BULLISH"?"rgba(37,99,235,0.12)":sig.technicalBias==="BEARISH"?"rgba(255,77,109,0.12)":"rgba(255,255,255,0.06)",
+                          }}>{sig.technicalBias}</span>
+                          {sig.trend && <span style={{ fontSize:11, color:"#6b7280" }}>trend {sig.trend}</span>}
+                          {sig.rsi14 != null && <span style={{ fontSize:11, color:"#6b7280" }}>RSI {sig.rsi14}</span>}
+                        </div>
+                      )}
                       <div style={{ fontSize:12, color:"#8a93a3", lineHeight:1.5 }}>{sig.rationale}</div>
                       <div style={{ display:"flex", gap:12, marginTop:6, flexWrap:"wrap" }}>
                         <span style={{ fontSize:11, color:"#ff4d6d99" }}>SL {sig.estimatedSL}</span>

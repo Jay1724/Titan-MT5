@@ -249,6 +249,91 @@ def get_prices(symbols: list[str]) -> dict:
     return result
 
 
+# ── Technical analysis (trend / momentum / historical context) ────────────────
+
+def _sma(values: list[float], period: int) -> Optional[float]:
+    if len(values) < period:
+        return None
+    return sum(values[-period:]) / period
+
+
+def _rsi(values: list[float], period: int = 14) -> Optional[float]:
+    """Classic RSI using a simple (non-Wilder) average — good enough for a bias read."""
+    if len(values) < period + 1:
+        return None
+    gains, losses = [], []
+    for i in range(1, len(values)):
+        diff = values[i] - values[i - 1]
+        gains.append(max(diff, 0))
+        losses.append(max(-diff, 0))
+    avg_gain = sum(gains[-period:]) / period
+    avg_loss = sum(losses[-period:]) / period
+    if avg_loss == 0:
+        return 100.0
+    rs = avg_gain / avg_loss
+    return 100 - (100 / (1 + rs))
+
+
+def get_technical_snapshot(symbol: str, timeframe=mt5.TIMEFRAME_H1, bars: int = 100) -> Optional[dict]:
+    """
+    Pull recent candle history from MT5 and derive a compact trend/momentum
+    read: SMA20 vs SMA50 trend, RSI14, recent swing range, and a deterministic
+    technical bias the AI can weigh alongside its own reasoning.
+    """
+    rates = mt5.copy_rates_from_pos(symbol, timeframe, 0, bars)
+    if rates is None or len(rates) < 30:
+        return None
+
+    closes = [float(r["close"]) for r in rates]
+    highs  = [float(r["high"]) for r in rates]
+    lows   = [float(r["low"]) for r in rates]
+    last   = closes[-1]
+
+    sma20, sma50 = _sma(closes, 20), _sma(closes, 50)
+    rsi14 = _rsi(closes, 14)
+    swing_high, swing_low = max(highs[-50:]), min(lows[-50:])
+    change_pct = ((last - closes[-25]) / closes[-25] * 100) if len(closes) >= 25 else None
+
+    trend = None
+    if sma20 is not None and sma50 is not None:
+        trend = "up" if sma20 > sma50 else "down" if sma20 < sma50 else "flat"
+
+    rsi_signal = None
+    if rsi14 is not None:
+        rsi_signal = "overbought" if rsi14 >= 70 else "oversold" if rsi14 <= 30 else "neutral"
+
+    # Deterministic bias: trend + price position vs SMA20 + RSI extremes.
+    score = 0
+    if trend == "up": score += 1
+    elif trend == "down": score -= 1
+    if sma20 is not None:
+        score += 1 if last > sma20 else -1
+    if rsi_signal == "oversold": score += 1
+    elif rsi_signal == "overbought": score -= 1
+    bias = "BULLISH" if score >= 2 else "BEARISH" if score <= -2 else "NEUTRAL"
+
+    return {
+        "trend": trend,
+        "sma20": round(sma20, 5) if sma20 is not None else None,
+        "sma50": round(sma50, 5) if sma50 is not None else None,
+        "rsi14": round(rsi14, 1) if rsi14 is not None else None,
+        "rsi_signal": rsi_signal,
+        "swing_high": round(swing_high, 5),
+        "swing_low": round(swing_low, 5),
+        "change_24h_pct": round(change_pct, 2) if change_pct is not None else None,
+        "bias": bias,
+    }
+
+
+def get_technicals(symbols: list[str]) -> dict:
+    result = {}
+    for sym in symbols:
+        snap = get_technical_snapshot(sym)
+        if snap:
+            result[sym] = snap
+    return result
+
+
 def get_open_positions() -> list[dict]:
     positions = mt5.positions_get()
     if positions is None:
@@ -434,10 +519,18 @@ async def run_ai_analysis(auto_execute: bool = False) -> dict:
     account = get_account()
     prices  = get_prices(WATCHED_SYMBOLS)
     open_pos = get_open_positions()
+    technicals = get_technicals(WATCHED_SYMBOLS)
 
     price_lines = "\n".join(
         f"{sym}: bid={d['bid']} ask={d['ask']}" for sym, d in prices.items()
     )
+
+    tech_lines = "\n".join(
+        f"{sym}: trend={t['trend']} (SMA20 {t['sma20']} vs SMA50 {t['sma50']}), "
+        f"RSI14={t['rsi14']} ({t['rsi_signal']}), 24h change={t['change_24h_pct']}%, "
+        f"recent swing range {t['swing_low']}–{t['swing_high']}, technical bias={t['bias']}"
+        for sym, t in technicals.items()
+    ) or "No technical history available."
 
     safe_note = (
         "SAFE MODE ACTIVE — all trades will use 0.01 lots regardless of suggestion."
@@ -450,6 +543,15 @@ Analyse the current market and decide whether to execute trades.
 
 MARKET DATA ({datetime.now().strftime('%H:%M:%S')}):
 {price_lines}
+
+TECHNICAL CONTEXT (H1 candles, last 100 bars):
+{tech_lines}
+
+Use the trend, RSI momentum, and recent swing range above to confirm directional
+bias before suggesting BUY or SELL — do not trade against a clear trend/technical
+bias unless RSI shows a genuine reversal setup (oversold in an uptrend pullback,
+overbought in a downtrend rally). If technical bias is NEUTRAL or conflicts with
+the trend, prefer HOLD unless price action strongly justifies otherwise.
 
 ACCOUNT:
 - Balance: {account['currency']} {account['balance']:,.2f}
@@ -505,6 +607,7 @@ Respond ONLY in JSON, no markdown, no preamble:
         raise HTTPException(502, f"AI returned non-JSON response: {e}. Raw: {raw[:300]}")
     analysis["timestamp"]        = datetime.now().isoformat()
     analysis["account_snapshot"] = account
+    analysis["technicals"]       = technicals
     analysis["session"]          = {
         "safe_mode":           RISK_CONFIG["safe_mode"],
         "daily_loss_usd":      SESSION["daily_loss_usd"],
@@ -513,9 +616,14 @@ Respond ONLY in JSON, no markdown, no preamble:
         "blocked_reason":      SESSION["blocked_reason"],
     }
 
-    # ── Estimate potential $ / R gain-loss per signal ───────────────────────
+    # ── Estimate potential $ / R gain-loss per signal, attach technical bias ─
     usdzar_rate = prices.get("USDZARm", {}).get("bid")
     for sig in analysis.get("signals", []):
+        tech = technicals.get(sig.get("symbol"))
+        if tech:
+            sig["technicalBias"] = tech["bias"]
+            sig["trend"] = tech["trend"]
+            sig["rsi14"] = tech["rsi14"]
         if sig.get("action") == "HOLD":
             continue
         tick = prices.get(sig.get("symbol"))
