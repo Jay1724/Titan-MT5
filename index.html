@@ -14,17 +14,26 @@
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body, #root { height: 100%; background: #080a0d; }
-    body { -webkit-tap-highlight-color: transparent; }
+    html, body, #root { height: 100%; }
+    body {
+      -webkit-tap-highlight-color: transparent;
+      background:
+        radial-gradient(circle at 15% -10%, rgba(10,132,255,0.30), transparent 45%),
+        radial-gradient(circle at 85% 0%, rgba(0,210,255,0.16), transparent 40%),
+        radial-gradient(circle at 50% 100%, rgba(10,90,255,0.14), transparent 50%),
+        #05070a;
+      background-attachment: fixed;
+    }
     @keyframes spin    { to { transform: rotate(360deg); } }
     @keyframes pulse   { 0%,100%{opacity:1} 50%{opacity:0.3} }
     @keyframes fadeIn  { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
     @keyframes slideIn { from{opacity:0;transform:translateX(-8px)} to{opacity:1;transform:translateX(0)} }
     ::-webkit-scrollbar { width: 4px; }
     ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: #222; border-radius: 2px; }
+    ::-webkit-scrollbar-thumb { background: rgba(10,132,255,0.35); border-radius: 2px; }
     input[type=range] { -webkit-appearance: none; appearance: none; height: 4px; border-radius: 2px; outline: none; }
-    input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #fff; cursor: pointer; }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #fff; cursor: pointer; box-shadow: 0 0 0 4px rgba(10,132,255,0.25), 0 2px 6px rgba(0,0,0,0.4); }
+    select { -webkit-appearance: none; appearance: none; }
   </style>
 </head>
 <body>
@@ -35,6 +44,36 @@
     const SYMBOLS = ["XAUUSDm", "EURUSDm", "USDZARm", "XAGUSDm", "USOILm"];
     const DEFAULT_BRIDGE_URL = "http://192.168.8.132:8000";
     const POLL_MS = 4000;
+
+    // ── Electric blue / Apple-glass design tokens ───────────────────────────────
+    const ACCENT       = "#0A84FF";  // primary electric blue
+    const ACCENT_DEEP  = "#0050D6";  // gradient / pressed state
+    const ACCENT_GLOW  = "#64D2FF";  // highlight glow
+    const DANGER        = "#ff4d6d";
+    const WARN          = "#f5c518";
+
+    // Reusable frosted-glass surface. Spread extra styles after calling.
+    const glass = (extra = {}) => ({
+      background: "rgba(255,255,255,0.055)",
+      backdropFilter: "blur(28px) saturate(180%)",
+      WebkitBackdropFilter: "blur(28px) saturate(180%)",
+      border: "1px solid rgba(255,255,255,0.14)",
+      boxShadow: "0 8px 32px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.09)",
+      ...extra,
+    });
+
+    const glassTint = (rgb, alpha = 0.12, extra = {}) => ({
+      background: `rgba(${rgb},${alpha})`,
+      backdropFilter: "blur(20px) saturate(180%)",
+      WebkitBackdropFilter: "blur(20px) saturate(180%)",
+      border: `1px solid rgba(${rgb},${alpha + 0.16})`,
+      boxShadow: `0 4px 20px rgba(${rgb},0.15), inset 0 1px 0 rgba(255,255,255,0.08)`,
+      ...extra,
+    });
+
+    // ── Formatting helpers ───────────────────────────────────────────────────
+    const fmtUsd = (n, signed = false) => `${signed && n >= 0 ? "+" : n < 0 ? "-" : ""}$${Math.abs(n).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+    const fmtZar = (n, signed = false) => `${signed && n >= 0 ? "+" : n < 0 ? "-" : ""}R${Math.abs(n).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`;
 
     // ── Bridge API ────────────────────────────────────────────────────────────
     async function bridgeFetch(bridgeUrl, path, options) {
@@ -76,27 +115,31 @@
       maxConsecLosses: rc.max_consecutive_losses,
     });
 
-    function Spark({ positive }) {
-      const pts = positive
-        ? [10,38,22,30,18,25,30,18,38,12,50,8,60,15,70,10,80,5]
-        : [10,12,22,18,30,28,38,22,50,30,60,38,70,35,80,42];
+    function Spark() {
+      const pts = [10,38,22,30,18,25,30,18,38,12,50,8,60,15,70,10,80,5];
       const poly = pts.reduce((a, v, i) => a + (i % 2 === 0 ? `${v},` : `${v} `), "");
       return (
-        <svg width="80" height="44" viewBox="0 0 90 50" style={{ opacity: 0.7 }}>
-          <polyline points={poly} fill="none" stroke={positive ? "#00e5a0" : "#ff4d6d"} strokeWidth="1.5" strokeLinejoin="round" />
+        <svg width="80" height="44" viewBox="0 0 90 50" style={{ opacity: 0.8 }}>
+          <polyline points={poly} fill="none" stroke={ACCENT_GLOW} strokeWidth="1.5" strokeLinejoin="round" />
         </svg>
       );
     }
 
     function Toggle({ value, onChange, label, sublabel }) {
       return (
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 0", borderBottom:"1px solid rgba(255,255,255,0.05)" }}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 0", borderBottom:"1px solid rgba(255,255,255,0.06)" }}>
           <div style={{ flex:1, marginRight:16 }}>
             <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:600, fontSize:14, color:"#fff" }}>{label}</div>
-            {sublabel && <div style={{ fontSize:12, color:"#555", marginTop:3 }}>{sublabel}</div>}
+            {sublabel && <div style={{ fontSize:12, color:"#6b7280", marginTop:3 }}>{sublabel}</div>}
           </div>
-          <div onClick={() => onChange(!value)} style={{ width:48, height:26, borderRadius:13, background: value ? "#00e5a0" : "#222", cursor:"pointer", position:"relative", transition:"background 0.25s", flexShrink:0 }}>
-            <div style={{ position:"absolute", top:3, left: value ? 25 : 3, width:20, height:20, borderRadius:"50%", background:"#fff", transition:"left 0.25s" }} />
+          <div onClick={() => onChange(!value)} style={{
+            width:48, height:26, borderRadius:13,
+            background: value ? `linear-gradient(135deg, ${ACCENT}, ${ACCENT_DEEP})` : "rgba(255,255,255,0.1)",
+            boxShadow: value ? `0 0 12px rgba(10,132,255,0.5)` : "none",
+            cursor:"pointer", position:"relative", transition:"all 0.25s", flexShrink:0,
+            border: "1px solid rgba(255,255,255,0.12)",
+          }}>
+            <div style={{ position:"absolute", top:2, left: value ? 24 : 2, width:20, height:20, borderRadius:"50%", background:"#fff", transition:"left 0.25s", boxShadow:"0 1px 3px rgba(0,0,0,0.4)" }} />
           </div>
         </div>
       );
@@ -104,15 +147,20 @@
 
     function SafeModeBanner({ safeMode, onToggle }) {
       return (
-        <div style={{ background: safeMode ? "rgba(0,229,160,0.07)" : "rgba(255,77,109,0.07)", border:`1px solid ${safeMode ? "rgba(0,229,160,0.2)" : "rgba(255,77,109,0.3)"}`, borderRadius:14, padding:"14px 20px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:16 }}>
+        <div style={glassTint(safeMode ? "10,132,255" : "255,77,109", safeMode ? 0.1 : 0.09, { borderRadius:18, padding:"14px 20px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:16 })}>
           <div style={{ display:"flex", alignItems:"center", gap:12 }}>
             <div style={{ fontSize:22 }}>{safeMode ? "🛡" : "⚠️"}</div>
             <div>
-              <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:14, color: safeMode ? "#00e5a0" : "#ff4d6d" }}>{safeMode ? "Safe Mode ON — 0.01 lots locked" : "Safe Mode OFF — Dynamic sizing"}</div>
-              <div style={{ fontSize:12, color:"#666", marginTop:2 }}>{safeMode ? "All trades fixed at 0.01 lots." : "Lot size calculated dynamically. Use with caution."}</div>
+              <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:14, color: safeMode ? ACCENT_GLOW : DANGER }}>{safeMode ? "Safe Mode ON — 0.01 lots locked" : "Safe Mode OFF — Dynamic sizing"}</div>
+              <div style={{ fontSize:12, color:"#8a93a3", marginTop:2 }}>{safeMode ? "All trades fixed at 0.01 lots." : "Lot size calculated dynamically. Use with caution."}</div>
             </div>
           </div>
-          <button onClick={() => onToggle(!safeMode)} style={{ background: safeMode ? "rgba(255,77,109,0.1)" : "rgba(0,229,160,0.1)", border:`1px solid ${safeMode ? "rgba(255,77,109,0.25)" : "rgba(0,229,160,0.25)"}`, borderRadius:10, padding:"8px 16px", cursor:"pointer", whiteSpace:"nowrap", color: safeMode ? "#ff4d6d" : "#00e5a0", fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:12 }}>
+          <button onClick={() => onToggle(!safeMode)} style={{
+            ...glassTint(safeMode ? "255,77,109" : "10,132,255", 0.14),
+            borderRadius:12, padding:"8px 16px", cursor:"pointer", whiteSpace:"nowrap",
+            color: safeMode ? DANGER : ACCENT_GLOW,
+            fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:12,
+          }}>
             {safeMode ? "Turn Off" : "Turn On"}
           </button>
         </div>
@@ -122,24 +170,24 @@
     function DailyLossMeter({ dailyLoss, dailyLossLimit, openingBalance }) {
       const pct   = openingBalance > 0 ? Math.min((dailyLoss / openingBalance) * 100, dailyLossLimit) : 0;
       const ratio = dailyLossLimit > 0 ? pct / dailyLossLimit : 0;
-      const color = ratio < 0.5 ? "#00e5a0" : ratio < 0.8 ? "#f5c518" : "#ff4d6d";
+      const color = ratio < 0.5 ? ACCENT_GLOW : ratio < 0.8 ? WARN : DANGER;
       const triggered = pct >= dailyLossLimit;
       return (
-        <div style={{ background:"rgba(255,255,255,0.03)", border:`1px solid ${triggered ? "rgba(255,77,109,0.3)" : "rgba(255,255,255,0.07)"}`, borderRadius:14, padding:"18px 20px" }}>
+        <div style={glass({ borderRadius:18, padding:"18px 20px", ...(triggered ? { border:"1px solid rgba(255,77,109,0.35)" } : {}) })}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", marginBottom:12 }}>
             <div>
-              <div style={{ fontSize:11, color:"#555", letterSpacing:"0.12em", textTransform:"uppercase", fontFamily:"'Syne',sans-serif" }}>Daily Loss</div>
+              <div style={{ fontSize:11, color:"#6b7280", letterSpacing:"0.12em", textTransform:"uppercase", fontFamily:"'Syne',sans-serif" }}>Daily Loss</div>
               <div style={{ fontSize:22, fontWeight:800, color, fontFamily:"'Syne',sans-serif", marginTop:4 }}>${dailyLoss.toFixed(2)}</div>
             </div>
             <div style={{ textAlign:"right" }}>
-              <div style={{ fontSize:11, color:"#444" }}>Limit: {dailyLossLimit}%</div>
-              <div style={{ fontSize:13, color:"#666", marginTop:2 }}>{pct.toFixed(1)}% used</div>
+              <div style={{ fontSize:11, color:"#556" }}>Limit: {dailyLossLimit}%</div>
+              <div style={{ fontSize:13, color:"#8a93a3", marginTop:2 }}>{pct.toFixed(1)}% used</div>
             </div>
           </div>
-          <div style={{ height:6, background:"rgba(255,255,255,0.06)", borderRadius:3, overflow:"hidden" }}>
-            <div style={{ height:"100%", width:`${Math.min(ratio*100,100)}%`, background:color, borderRadius:3, transition:"width 0.4s" }} />
+          <div style={{ height:6, background:"rgba(255,255,255,0.08)", borderRadius:3, overflow:"hidden" }}>
+            <div style={{ height:"100%", width:`${Math.min(ratio*100,100)}%`, background:color, borderRadius:3, transition:"width 0.4s", boxShadow:`0 0 8px ${color}` }} />
           </div>
-          {triggered && <div style={{ marginTop:10, fontSize:12, color:"#ff4d6d" }}>🚨 Kill switch active — no new trades until tomorrow</div>}
+          {triggered && <div style={{ marginTop:10, fontSize:12, color:DANGER }}>🚨 Kill switch active — no new trades until tomorrow</div>}
         </div>
       );
     }
@@ -147,17 +195,42 @@
     function LossStreak({ consecutive, maxAllowed, onReset }) {
       const isPaused = consecutive >= maxAllowed;
       return (
-        <div style={{ background:"rgba(255,255,255,0.03)", border:`1px solid ${isPaused ? "rgba(255,77,109,0.3)" : "rgba(255,255,255,0.07)"}`, borderRadius:14, padding:"18px 20px" }}>
-          <div style={{ fontSize:11, color:"#555", letterSpacing:"0.12em", textTransform:"uppercase", fontFamily:"'Syne',sans-serif", marginBottom:12 }}>Loss Streak</div>
+        <div style={glass({ borderRadius:18, padding:"18px 20px", ...(isPaused ? { border:"1px solid rgba(255,77,109,0.35)" } : {}) })}>
+          <div style={{ fontSize:11, color:"#6b7280", letterSpacing:"0.12em", textTransform:"uppercase", fontFamily:"'Syne',sans-serif", marginBottom:12 }}>Loss Streak</div>
           <div style={{ display:"flex", gap:6, marginBottom:12 }}>
             {Array.from({ length: Math.max(maxAllowed,1) }).map((_,i) => (
-              <div key={i} style={{ flex:1, height:8, borderRadius:4, background: i < consecutive ? "#ff4d6d" : "rgba(255,255,255,0.06)", transition:"background 0.3s" }} />
+              <div key={i} style={{ flex:1, height:8, borderRadius:4, background: i < consecutive ? DANGER : "rgba(255,255,255,0.08)", boxShadow: i < consecutive ? `0 0 6px ${DANGER}` : "none", transition:"background 0.3s" }} />
             ))}
           </div>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-            <div style={{ fontSize:13, color: isPaused ? "#ff4d6d" : "#666" }}>{isPaused ? "⚠ Agent paused" : `${consecutive} / ${maxAllowed} losses`}</div>
-            {isPaused && <button onClick={onReset} style={{ background:"rgba(0,229,160,0.1)", border:"1px solid rgba(0,229,160,0.2)", borderRadius:8, padding:"5px 12px", color:"#00e5a0", cursor:"pointer", fontFamily:"'Syne',sans-serif", fontWeight:600, fontSize:11 }}>Reset</button>}
+            <div style={{ fontSize:13, color: isPaused ? DANGER : "#8a93a3" }}>{isPaused ? "⚠ Agent paused" : `${consecutive} / ${maxAllowed} losses`}</div>
+            {isPaused && <button onClick={onReset} style={{ ...glassTint("10,132,255", 0.14), borderRadius:10, padding:"5px 12px", color:ACCENT_GLOW, cursor:"pointer", fontFamily:"'Syne',sans-serif", fontWeight:600, fontSize:11 }}>Reset</button>}
           </div>
+        </div>
+      );
+    }
+
+    function WinStreak({ streak }) {
+      return (
+        <div style={glass({ borderRadius:18, padding:"18px 20px" })}>
+          <div style={{ fontSize:11, color:"#6b7280", letterSpacing:"0.12em", textTransform:"uppercase", fontFamily:"'Syne',sans-serif", marginBottom:12 }}>Win Streak</div>
+          <div style={{ display:"flex", gap:6, marginBottom:12 }}>
+            {Array.from({ length: Math.max(Math.min(streak,10),1) }).map((_,i) => (
+              <div key={i} style={{ flex:1, height:8, borderRadius:4, background: i < streak ? ACCENT_GLOW : "rgba(255,255,255,0.08)", boxShadow: i < streak ? `0 0 6px ${ACCENT_GLOW}` : "none" }} />
+            ))}
+          </div>
+          <div style={{ fontSize:13, color: streak > 0 ? ACCENT_GLOW : "#8a93a3" }}>{streak > 0 ? `🔥 ${streak} win${streak===1?"":"s"} in a row` : "No active streak"}</div>
+        </div>
+      );
+    }
+
+    function RealizedCard({ label, usd, zar }) {
+      const color = usd >= 0 ? ACCENT_GLOW : DANGER;
+      return (
+        <div style={glass({ borderRadius:18, padding:"16px 18px" })}>
+          <div style={{ fontSize:10, color:"#6b7280", letterSpacing:"0.12em", textTransform:"uppercase", fontFamily:"'Syne',sans-serif" }}>{label}</div>
+          <div style={{ fontSize:22, fontWeight:800, color, fontFamily:"'Syne',sans-serif", marginTop:5 }}>{fmtUsd(usd, true)}</div>
+          {zar != null && <div style={{ fontSize:11, color:"#6b7280", marginTop:4 }}>≈ {fmtZar(zar, true)}</div>}
         </div>
       );
     }
@@ -192,39 +265,48 @@
         await onTrade(sig);
         setExecuting(null);
       };
-      const sentColor = { BULLISH:"#00e5a0", BEARISH:"#ff4d6d", NEUTRAL:"#f5c518" };
+      const sentColor = { BULLISH: ACCENT_GLOW, BEARISH: DANGER, NEUTRAL: WARN };
+      const sentRgb   = { BULLISH: "10,132,255", BEARISH: "255,77,109", NEUTRAL: "245,197,24" };
 
       return (
-        <div style={{ background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:16, padding:24, display:"flex", flexDirection:"column", gap:16 }}>
+        <div style={glass({ borderRadius:20, padding:24, display:"flex", flexDirection:"column", gap:16 })}>
           <div style={{ display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
             <div style={{ flex:1 }}>
-              <div style={{ fontFamily:"'Syne',sans-serif", fontSize:13, color:"#888", letterSpacing:"0.12em", textTransform:"uppercase" }}>AI Agent</div>
+              <div style={{ fontFamily:"'Syne',sans-serif", fontSize:13, color:"#8a93a3", letterSpacing:"0.12em", textTransform:"uppercase" }}>AI Agent</div>
               <div style={{ fontFamily:"'Syne',sans-serif", fontSize:18, fontWeight:700, color:"#fff", marginTop:2 }}>Market Analysis</div>
             </div>
-            <div style={{ display:"flex", alignItems:"center", gap:10, background: autoExecute ? "rgba(0,229,160,0.08)" : "rgba(255,255,255,0.03)", border:`1px solid ${autoExecute ? "rgba(0,229,160,0.2)" : "rgba(255,255,255,0.08)"}`, borderRadius:10, padding:"8px 14px" }}>
+            <div style={{ display:"flex", alignItems:"center", gap:10, ...glassTint(autoExecute ? "10,132,255" : "255,255,255", autoExecute ? 0.1 : 0.04), borderRadius:12, padding:"8px 14px" }}>
               <div>
-                <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:600, fontSize:12, color: autoExecute ? "#00e5a0" : "#777" }}>Auto-Execute</div>
-                <div style={{ fontSize:10, color:"#444", marginTop:1 }}>{autoExecute ? `fires at ${config.minConfidence}%+` : "manual only"}</div>
+                <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:600, fontSize:12, color: autoExecute ? ACCENT_GLOW : "#8a93a3" }}>Auto-Execute</div>
+                <div style={{ fontSize:10, color:"#556", marginTop:1 }}>{autoExecute ? `fires at ${config.minConfidence}%+` : "manual only"}</div>
               </div>
-              <div onClick={() => onAutoExecuteChange(!autoExecute)} style={{ width:40, height:22, borderRadius:11, background: autoExecute ? "#00e5a0" : "#222", cursor:"pointer", position:"relative", transition:"background 0.25s", flexShrink:0 }}>
-                <div style={{ position:"absolute", top:2, left: autoExecute ? 20 : 2, width:18, height:18, borderRadius:"50%", background:"#fff", transition:"left 0.25s" }} />
+              <div onClick={() => onAutoExecuteChange(!autoExecute)} style={{ width:40, height:22, borderRadius:11, background: autoExecute ? `linear-gradient(135deg, ${ACCENT}, ${ACCENT_DEEP})` : "rgba(255,255,255,0.1)", cursor:"pointer", position:"relative", transition:"all 0.25s", flexShrink:0, border:"1px solid rgba(255,255,255,0.12)" }}>
+                <div style={{ position:"absolute", top:2, left: autoExecute ? 20 : 2, width:18, height:18, borderRadius:"50%", background:"#fff", transition:"left 0.25s", boxShadow:"0 1px 3px rgba(0,0,0,0.4)" }} />
               </div>
             </div>
-            <button onClick={runAnalysis} disabled={thinking||blocked} style={{ background: blocked ? "rgba(255,77,109,0.08)" : thinking ? "rgba(0,229,160,0.1)" : "linear-gradient(135deg,#00e5a0,#00b37d)", border: blocked ? "1px solid rgba(255,77,109,0.2)" : "none", borderRadius:10, padding:"10px 20px", color: blocked ? "#ff4d6d44" : thinking ? "#00e5a0" : "#001a12", fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:13, cursor: blocked||thinking ? "not-allowed" : "pointer", display:"flex", alignItems:"center", gap:8, whiteSpace:"nowrap" }}>
-              {thinking ? <><span style={{ display:"inline-block", width:12, height:12, border:"2px solid #00e5a0", borderTopColor:"transparent", borderRadius:"50%", animation:"spin 0.8s linear infinite" }}/> Analysing…</> : blocked ? (!connected ? "⛔ Offline" : "🚨 Blocked") : "▶ Run Analysis"}
+            <button onClick={runAnalysis} disabled={thinking||blocked} style={{
+              background: blocked ? "rgba(255,77,109,0.1)" : thinking ? "rgba(10,132,255,0.12)" : `linear-gradient(135deg, ${ACCENT}, ${ACCENT_DEEP})`,
+              backdropFilter: blocked || thinking ? "blur(16px)" : "none",
+              border: blocked ? "1px solid rgba(255,77,109,0.25)" : thinking ? "1px solid rgba(10,132,255,0.3)" : "1px solid rgba(255,255,255,0.18)",
+              boxShadow: !blocked && !thinking ? "0 4px 20px rgba(10,132,255,0.4), inset 0 1px 0 rgba(255,255,255,0.25)" : "none",
+              borderRadius:12, padding:"10px 20px", color: blocked ? "#ff4d6d88" : thinking ? ACCENT_GLOW : "#fff",
+              fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:13, cursor: blocked||thinking ? "not-allowed" : "pointer",
+              display:"flex", alignItems:"center", gap:8, whiteSpace:"nowrap",
+            }}>
+              {thinking ? <><span style={{ display:"inline-block", width:12, height:12, border:`2px solid ${ACCENT_GLOW}`, borderTopColor:"transparent", borderRadius:"50%", animation:"spin 0.8s linear infinite" }}/> Analysing…</> : blocked ? (!connected ? "⛔ Offline" : "🚨 Blocked") : "▶ Run Analysis"}
             </button>
           </div>
 
-          {autoExecute && !blocked && <div style={{ background:"rgba(0,229,160,0.06)", border:"1px solid rgba(0,229,160,0.15)", borderRadius:10, padding:"10px 14px", fontSize:12, color:"#00e5a0" }}>⚡ Auto-execute ON — signals ≥{config.minConfidence}% confidence will trade automatically</div>}
-          {!connected && <div style={{ background:"rgba(255,77,109,0.08)", border:"1px solid rgba(255,77,109,0.2)", borderRadius:10, padding:12, color:"#ff4d6d", fontSize:13 }}>⛔ Can't reach the MT5 bridge. Check the Bridge URL in Config and that mt5_bridge.py is running.</div>}
-          {connected && blocked && <div style={{ background:"rgba(255,77,109,0.08)", border:"1px solid rgba(255,77,109,0.2)", borderRadius:10, padding:12, color:"#ff4d6d", fontSize:13 }}>{killSwitchActive ? "🚨 Daily loss limit reached — blocked until tomorrow." : "⚠ Paused after consecutive losses — reset counter to resume."}</div>}
-          {error  && <div style={{ background:"rgba(255,77,109,0.1)", border:"1px solid rgba(255,77,109,0.3)", borderRadius:10, padding:12, color:"#ff4d6d", fontSize:13 }}>{error}</div>}
+          {autoExecute && !blocked && <div style={glassTint("10,132,255", 0.08, { borderRadius:12, padding:"10px 14px", fontSize:12, color:ACCENT_GLOW })}>⚡ Auto-execute ON — signals ≥{config.minConfidence}% confidence will trade automatically</div>}
+          {!connected && <div style={glassTint("255,77,109", 0.1, { borderRadius:12, padding:12, color:DANGER, fontSize:13 })}>⛔ Can't reach the MT5 bridge. Check the Bridge URL in Config and that mt5_bridge.py is running.</div>}
+          {connected && blocked && <div style={glassTint("255,77,109", 0.1, { borderRadius:12, padding:12, color:DANGER, fontSize:13 })}>{killSwitchActive ? "🚨 Daily loss limit reached — blocked until tomorrow." : "⚠ Paused after consecutive losses — reset counter to resume."}</div>}
+          {error  && <div style={glassTint("255,77,109", 0.12, { borderRadius:12, padding:12, color:DANGER, fontSize:13 })}>{error}</div>}
 
           {thinking && !analysis && (
             <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
               {["Fetching price action…","Evaluating momentum…","Computing risk/reward…"].map((t,i) => (
-                <div key={i} style={{ display:"flex", alignItems:"center", gap:10, color:"#666", fontSize:13 }}>
-                  <span style={{ width:6, height:6, borderRadius:"50%", background:"#00e5a0", display:"inline-block", animation:"pulse 1s infinite" }}/>{t}
+                <div key={i} style={{ display:"flex", alignItems:"center", gap:10, color:"#8a93a3", fontSize:13 }}>
+                  <span style={{ width:6, height:6, borderRadius:"50%", background:ACCENT, display:"inline-block", animation:"pulse 1s infinite", boxShadow:`0 0 6px ${ACCENT}` }}/>{t}
                 </div>
               ))}
             </div>
@@ -233,44 +315,123 @@
           {analysis && (
             <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
               <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:12 }}>
-                <p style={{ color:"#aaa", fontSize:14, lineHeight:1.6, margin:0, flex:1 }}>{analysis.summary}</p>
-                <div style={{ background:`rgba(${analysis.overallSentiment==="BULLISH"?"0,229,160":analysis.overallSentiment==="BEARISH"?"255,77,109":"245,197,24"},0.12)`, border:`1px solid ${(sentColor[analysis.overallSentiment]||"#666")}40`, borderRadius:8, padding:"6px 12px", whiteSpace:"nowrap", color:sentColor[analysis.overallSentiment]||"#fff", fontSize:12, fontWeight:700, fontFamily:"'Syne',sans-serif" }}>{analysis.overallSentiment}</div>
+                <p style={{ color:"#b8c0cc", fontSize:14, lineHeight:1.6, margin:0, flex:1 }}>{analysis.summary}</p>
+                <div style={{ ...glassTint(sentRgb[analysis.overallSentiment] || "255,255,255", 0.14), borderRadius:10, padding:"6px 12px", whiteSpace:"nowrap", color:sentColor[analysis.overallSentiment]||"#fff", fontSize:12, fontWeight:700, fontFamily:"'Syne',sans-serif" }}>{analysis.overallSentiment}</div>
               </div>
-              {analysis.riskWarning && <div style={{ background:"rgba(245,197,24,0.08)", border:"1px solid rgba(245,197,24,0.2)", borderRadius:10, padding:"10px 14px", color:"#f5c518", fontSize:13 }}>⚠ {analysis.riskWarning}</div>}
+              {analysis.riskWarning && <div style={glassTint("245,197,24", 0.08, { borderRadius:12, padding:"10px 14px", color:WARN, fontSize:13 })}>⚠ {analysis.riskWarning}</div>}
               <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
                 {analysis.signals?.map((sig,i) => (
-                  <div key={i} style={{ background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:12, padding:14, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
+                  <div key={i} style={glass({ borderRadius:14, padding:14, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" })}>
                     <div style={{ minWidth:68 }}>
                       <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:13 }}>{sig.symbol}</div>
-                      <div style={{ fontSize:11, fontWeight:700, marginTop:3, color: sig.action==="BUY"?"#00e5a0":sig.action==="SELL"?"#ff4d6d":"#888" }}>{sig.action}</div>
+                      <div style={{ fontSize:11, fontWeight:700, marginTop:3, color: sig.action==="BUY"?ACCENT_GLOW:sig.action==="SELL"?DANGER:"#8a93a3" }}>{sig.action}</div>
                     </div>
-                    <div style={{ flex:1, minWidth:120 }}>
-                      <div style={{ fontSize:12, color:"#777", lineHeight:1.5 }}>{sig.rationale}</div>
-                      <div style={{ display:"flex", gap:12, marginTop:6 }}>
-                        <span style={{ fontSize:11, color:"#ff4d6d88" }}>SL {sig.estimatedSL}</span>
-                        <span style={{ fontSize:11, color:"#00e5a088" }}>TP {sig.estimatedTP}</span>
+                    <div style={{ flex:1, minWidth:160 }}>
+                      <div style={{ fontSize:12, color:"#8a93a3", lineHeight:1.5 }}>{sig.rationale}</div>
+                      <div style={{ display:"flex", gap:12, marginTop:6, flexWrap:"wrap" }}>
+                        <span style={{ fontSize:11, color:"#ff4d6d99" }}>SL {sig.estimatedSL}</span>
+                        <span style={{ fontSize:11, color:"#64D2FF99" }}>TP {sig.estimatedTP}</span>
                       </div>
+                      {sig.potentialGainUsd != null && (
+                        <div style={{ display:"flex", gap:12, marginTop:6, flexWrap:"wrap" }}>
+                          <span style={{ fontSize:12, fontWeight:700, color:ACCENT_GLOW }}>
+                            ▲ {fmtUsd(sig.potentialGainUsd)}{sig.potentialGainZar != null && ` · ${fmtZar(sig.potentialGainZar)}`}
+                          </span>
+                          {sig.potentialLossUsd != null && (
+                            <span style={{ fontSize:12, fontWeight:700, color:DANGER }}>
+                              ▼ {fmtUsd(sig.potentialLossUsd)}{sig.potentialLossZar != null && ` · ${fmtZar(sig.potentialLossZar)}`}
+                            </span>
+                          )}
+                        </div>
+                      )}
                       {sig.executed !== undefined && (
-                        <div style={{ marginTop:6, fontSize:11, color: sig.executed ? "#00e5a0" : "#ff4d6d" }}>
+                        <div style={{ marginTop:6, fontSize:11, color: sig.executed ? ACCENT_GLOW : DANGER }}>
                           {sig.executed ? "✓ auto-executed" : `✕ ${sig.error || "not executed"}`}
                         </div>
                       )}
                     </div>
                     <div style={{ textAlign:"center", minWidth:44 }}>
-                      <div style={{ fontSize:20, fontWeight:700, fontFamily:"'Syne',sans-serif", color: sig.confidence>=75?"#00e5a0":sig.confidence>=50?"#f5c518":"#ff4d6d" }}>{sig.confidence}</div>
-                      <div style={{ fontSize:10, color:"#555" }}>CONF%</div>
+                      <div style={{ fontSize:20, fontWeight:700, fontFamily:"'Syne',sans-serif", color: sig.confidence>=75?ACCENT_GLOW:sig.confidence>=50?WARN:DANGER }}>{sig.confidence}</div>
+                      <div style={{ fontSize:10, color:"#556" }}>CONF%</div>
                     </div>
                     {sig.action !== "HOLD" ? (
-                      <button onClick={() => handleExecute(sig,i)} disabled={executing===i||blocked} style={{ background: executing===i?"rgba(255,255,255,0.05)":sig.action==="BUY"?"rgba(0,229,160,0.15)":"rgba(255,77,109,0.15)", border:`1px solid ${sig.action==="BUY"?"#00e5a050":"#ff4d6d50"}`, borderRadius:10, padding:"10px 18px", color: executing===i?"#555":sig.action==="BUY"?"#00e5a0":"#ff4d6d", fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:13, cursor: executing===i||blocked?"not-allowed":"pointer", whiteSpace:"nowrap", minWidth:90, display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
-                        {executing===i ? <><span style={{ display:"inline-block", width:10, height:10, border:"2px solid #555", borderTopColor:"transparent", borderRadius:"50%", animation:"spin 0.8s linear infinite" }}/> Placing…</> : `${sig.action==="BUY"?"▲":"▼"} ${sig.action}`}
+                      <button onClick={() => handleExecute(sig,i)} disabled={executing===i||blocked} style={{
+                        ...glassTint(sig.action==="BUY" ? "10,132,255" : "255,77,109", executing===i ? 0.03 : 0.16),
+                        borderRadius:12, padding:"10px 18px",
+                        color: executing===i?"#556":sig.action==="BUY"?ACCENT_GLOW:DANGER,
+                        fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:13, cursor: executing===i||blocked?"not-allowed":"pointer",
+                        whiteSpace:"nowrap", minWidth:90, display:"flex", alignItems:"center", justifyContent:"center", gap:6,
+                      }}>
+                        {executing===i ? <><span style={{ display:"inline-block", width:10, height:10, border:"2px solid #667", borderTopColor:"transparent", borderRadius:"50%", animation:"spin 0.8s linear infinite" }}/> Placing…</> : `${sig.action==="BUY"?"▲":"▼"} ${sig.action}`}
                       </button>
-                    ) : <div style={{ minWidth:90, textAlign:"center", color:"#444", fontSize:12 }}>— HOLD —</div>}
+                    ) : <div style={{ minWidth:90, textAlign:"center", color:"#556", fontSize:12 }}>— HOLD —</div>}
                   </div>
                 ))}
               </div>
             </div>
           )}
-          {!analysis && !thinking && !blocked && <div style={{ textAlign:"center", padding:"30px 0", color:"#444", fontSize:14 }}>Press Run Analysis to evaluate current market conditions</div>}
+          {!analysis && !thinking && !blocked && <div style={{ textAlign:"center", padding:"30px 0", color:"#556", fontSize:14 }}>Press Run Analysis to evaluate current market conditions</div>}
+        </div>
+      );
+    }
+
+    // ── Goals ─────────────────────────────────────────────────────────────────
+    function GoalCard({ goal, balance, usdZarRate, onDelete }) {
+      const balanceInGoalCcy = goal.currency === "ZAR" ? (usdZarRate ? balance * usdZarRate : null) : balance;
+      const pct = balanceInGoalCcy != null && goal.target > 0 ? Math.min(balanceInGoalCcy / goal.target * 100, 100) : 0;
+      const remaining = balanceInGoalCcy != null ? Math.max(goal.target - balanceInGoalCcy, 0) : null;
+      const fmt = goal.currency === "ZAR" ? fmtZar : fmtUsd;
+      const reached = pct >= 100;
+      return (
+        <div style={glass({ borderRadius:18, padding:20, ...(reached ? { border: `1px solid rgba(10,132,255,0.4)` } : {}) })}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:10, marginBottom:14 }}>
+            <div>
+              <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:15 }}>{goal.name}</div>
+              <div style={{ fontSize:12, color:"#8a93a3", marginTop:3 }}>Target: {fmt(goal.target)}</div>
+            </div>
+            <button onClick={() => onDelete(goal.id)} style={{ background:"transparent", border:"none", color:"#556", cursor:"pointer", fontSize:16, padding:4 }}>✕</button>
+          </div>
+          <div style={{ height:8, background:"rgba(255,255,255,0.08)", borderRadius:4, overflow:"hidden", marginBottom:10 }}>
+            <div style={{ height:"100%", width:`${pct}%`, background: reached ? `linear-gradient(90deg, ${ACCENT}, ${ACCENT_GLOW})` : `linear-gradient(90deg, ${ACCENT_DEEP}, ${ACCENT})`, borderRadius:4, transition:"width 0.5s", boxShadow:`0 0 10px rgba(10,132,255,0.5)` }} />
+          </div>
+          <div style={{ display:"flex", justifyContent:"space-between", fontSize:12 }}>
+            <span style={{ color: reached ? ACCENT_GLOW : "#8a93a3", fontWeight:700 }}>{reached ? "🎉 Goal reached!" : `${pct.toFixed(1)}% there`}</span>
+            {!reached && remaining != null && <span style={{ color:"#556" }}>{fmt(remaining)} to go</span>}
+          </div>
+        </div>
+      );
+    }
+
+    function AddGoalForm({ onAdd }) {
+      const [name, setName] = useState("");
+      const [target, setTarget] = useState("");
+      const [currency, setCurrency] = useState("USD");
+
+      const submit = () => {
+        const amount = parseFloat(target);
+        if (!name.trim() || !amount || amount <= 0) return;
+        onAdd({ id: Date.now(), name: name.trim(), target: amount, currency, createdAt: new Date().toISOString() });
+        setName(""); setTarget("");
+      };
+
+      return (
+        <div style={glass({ borderRadius:18, padding:20 })}>
+          <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:15, marginBottom:14 }}>New Goal</div>
+          <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. 🏡 Dream home deposit" style={{ background:"rgba(255,255,255,0.06)", backdropFilter:"blur(12px)", border:"1px solid rgba(255,255,255,0.14)", borderRadius:10, padding:"10px 14px", color:"#fff", fontFamily:"'JetBrains Mono',monospace", fontSize:13 }} />
+            <div style={{ display:"flex", gap:10 }}>
+              <input value={target} onChange={e => setTarget(e.target.value)} type="number" min="0" placeholder="Target amount" style={{ flex:1, background:"rgba(255,255,255,0.06)", backdropFilter:"blur(12px)", border:"1px solid rgba(255,255,255,0.14)", borderRadius:10, padding:"10px 14px", color:"#fff", fontFamily:"'JetBrains Mono',monospace", fontSize:13 }} />
+              <select value={currency} onChange={e => setCurrency(e.target.value)} style={{ background:"rgba(255,255,255,0.06)", backdropFilter:"blur(12px)", border:"1px solid rgba(255,255,255,0.14)", borderRadius:10, padding:"10px 14px", color:"#fff", fontFamily:"'JetBrains Mono',monospace", fontSize:13 }}>
+                <option value="USD" style={{ color:"#000" }}>USD</option>
+                <option value="ZAR" style={{ color:"#000" }}>ZAR</option>
+              </select>
+            </div>
+            <button onClick={submit} style={{
+              background:`linear-gradient(135deg, ${ACCENT}, ${ACCENT_DEEP})`, border:"1px solid rgba(255,255,255,0.18)",
+              boxShadow:"0 4px 16px rgba(10,132,255,0.4)", borderRadius:10, padding:"10px 18px", cursor:"pointer",
+              color:"#fff", fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:13,
+            }}>+ Add Goal</button>
+          </div>
         </div>
       );
     }
@@ -284,6 +445,7 @@
       const [trades, setTrades]           = useState([]);
       const [prices, setPrices]           = useState({});
       const [account, setAccount]         = useState({ balance: 0, currency: "USD" });
+      const [history, setHistory]         = useState([]);
       const [activeTab, setActiveTab]     = useState("dashboard");
       const [autoExecute, setAutoExecute] = useState(false);
       const [log, setLog] = useState([{ time: new Date().toLocaleTimeString("en-ZA",{hour12:false}), msg: "Dashboard loaded — connecting to bridge…", type: "info" }]);
@@ -291,11 +453,27 @@
       const [config, setConfig] = useState({ safeMode:true, fixedLots:0.01, riskPct:0.5, slPips:50, tpRatio:2.0, minConfidence:80, maxPositions:3, maxDailyLossPct:3.0, maxLossPerTrade:10, maxConsecLosses:3 });
       const [session, setSession] = useState({ daily_loss_usd:0, consecutive_losses:0, opening_balance:0, blocked_reason:null });
 
-      const lastLoggedError = useRef(null);
+      const [goals, setGoals] = useState(() => {
+        try { return JSON.parse(localStorage.getItem("titan_goals") || "[]"); } catch (e) { return []; }
+      });
+      useEffect(() => { localStorage.setItem("titan_goals", JSON.stringify(goals)); }, [goals]);
+      const addGoal = (g) => setGoals(prev => [...prev, g]);
+      const deleteGoal = (id) => setGoals(prev => prev.filter(g => g.id !== id));
 
       const killSwitchActive = session.opening_balance > 0 && (session.daily_loss_usd / session.opening_balance * 100) >= config.maxDailyLossPct;
       const agentPaused      = session.consecutive_losses >= config.maxConsecLosses;
       const totalProfit      = trades.reduce((s,t) => s + t.profit, 0);
+      const usdZarRate       = prices["USDZARm"]?.bid || null;
+
+      // ── Realized P&L + win streak from closed-deal history ──────────────────
+      const closedDeals = history.filter(d => d.profit !== 0);
+      const todayStr = new Date().toISOString().slice(0,10);
+      const realizedToday   = closedDeals.filter(d => d.time?.startsWith(todayStr)).reduce((s,d) => s + d.profit, 0);
+      const realizedAllTime = closedDeals.reduce((s,d) => s + d.profit, 0);
+      let winStreak = 0;
+      for (const d of closedDeals) { // closedDeals is time-descending from the bridge
+        if (d.profit > 0) winStreak++; else break;
+      }
 
       const addLog = (msg, type="info") => {
         const time = new Date().toLocaleTimeString("en-ZA",{hour12:false});
@@ -316,11 +494,12 @@
 
         const poll = async () => {
           try {
-            const [acct, pos, prc, sess] = await Promise.all([
+            const [acct, pos, prc, sess, hist] = await Promise.all([
               bridgeFetch(bridgeUrl, "/account"),
               bridgeFetch(bridgeUrl, "/positions"),
               bridgeFetch(bridgeUrl, "/prices"),
               bridgeFetch(bridgeUrl, "/session"),
+              bridgeFetch(bridgeUrl, "/history?limit=100"),
             ]);
             if (cancelled) return;
             setAccount(acct);
@@ -330,6 +509,7 @@
             })));
             setPrices(prc);
             setSession(sess);
+            setHistory(hist);
             if (!connected) addLog("Connected to MT5 bridge", "info");
             setConnected(true);
           } catch (e) {
@@ -403,44 +583,57 @@
         }
       };
 
-      const SC = (label,value,sub,color="#fff") => (
-        <div style={{ background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:14, padding:"16px 18px" }}>
-          <div style={{ fontSize:10, color:"#555", letterSpacing:"0.12em", textTransform:"uppercase", fontFamily:"'Syne',sans-serif" }}>{label}</div>
+      const SC = (label,value,sub,color="#fff",zar=null) => (
+        <div style={glass({ borderRadius:16, padding:"16px 18px" })}>
+          <div style={{ fontSize:10, color:"#6b7280", letterSpacing:"0.12em", textTransform:"uppercase", fontFamily:"'Syne',sans-serif" }}>{label}</div>
           <div style={{ fontSize:24, fontWeight:800, color, fontFamily:"'Syne',sans-serif", marginTop:5, lineHeight:1 }}>{value}</div>
-          {sub && <div style={{ fontSize:11, color:"#555", marginTop:5 }}>{sub}</div>}
+          {sub && <div style={{ fontSize:11, color:"#6b7280", marginTop:5 }}>{sub}</div>}
+          {zar && <div style={{ fontSize:11, color:"#556", marginTop:2 }}>≈ {zar}</div>}
         </div>
       );
 
-      const tabs = ["dashboard","agent","config"];
+      const tabs = ["dashboard","agent","goals","config"];
 
       return (
-        <div style={{ minHeight:"100vh", background:"#080a0d", color:"#fff", fontFamily:"'JetBrains Mono',monospace", paddingBottom:60 }}>
+        <div style={{ minHeight:"100vh", color:"#fff", fontFamily:"'JetBrains Mono',monospace", paddingBottom:60 }}>
           {/* Header */}
-          <div style={{ borderBottom:"1px solid rgba(255,255,255,0.06)", padding:"16px 20px", display:"flex", alignItems:"center", justifyContent:"space-between", position:"sticky", top:0, zIndex:100, background:"rgba(8,10,13,0.95)" }}>
+          <div style={{ ...glass({ borderRadius:0 }), borderLeft:"none", borderRight:"none", borderTop:"none", padding:"16px 20px", display:"flex", alignItems:"center", justifyContent:"space-between", position:"sticky", top:0, zIndex:100 }}>
             <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-              <div style={{ width:34, height:34, borderRadius:10, background:"linear-gradient(135deg,#00e5a0,#00b37d)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:15 }}>⚡</div>
+              <div style={{ width:34, height:34, borderRadius:10, background:`linear-gradient(135deg, ${ACCENT}, ${ACCENT_DEEP})`, boxShadow:"0 2px 12px rgba(10,132,255,0.5), inset 0 1px 0 rgba(255,255,255,0.3)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:15 }}>⚡</div>
               <div>
-                <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:800, fontSize:15 }}>TITAN<span style={{ color:"#00e5a0" }}>·MT5</span></div>
-                <div style={{ fontSize:9, color:"#444", letterSpacing:"0.1em" }}>AI TRADING AGENT</div>
+                <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:800, fontSize:15 }}>TITAN<span style={{ color:ACCENT_GLOW }}>·MT5</span></div>
+                <div style={{ fontSize:9, color:"#556", letterSpacing:"0.1em" }}>AI TRADING AGENT</div>
               </div>
             </div>
             <div style={{ display:"flex", gap:4 }}>
               {tabs.map(t => (
-                <button key={t} onClick={() => setActiveTab(t)} style={{ background: activeTab===t?"rgba(0,229,160,0.1)":"transparent", border: activeTab===t?"1px solid rgba(0,229,160,0.25)":"1px solid transparent", borderRadius:8, padding:"6px 14px", color: activeTab===t?"#00e5a0":"#555", fontFamily:"'Syne',sans-serif", fontWeight:600, fontSize:11, cursor:"pointer", textTransform:"capitalize" }}>{t}</button>
+                <button key={t} onClick={() => setActiveTab(t)} style={{
+                  background: activeTab===t ? "rgba(10,132,255,0.16)" : "transparent",
+                  border: activeTab===t ? "1px solid rgba(10,132,255,0.35)" : "1px solid transparent",
+                  boxShadow: activeTab===t ? "0 0 12px rgba(10,132,255,0.25)" : "none",
+                  borderRadius:10, padding:"6px 14px", color: activeTab===t?ACCENT_GLOW:"#6b7280",
+                  fontFamily:"'Syne',sans-serif", fontWeight:600, fontSize:11, cursor:"pointer", textTransform:"capitalize",
+                  transition:"all 0.2s",
+                }}>{t}</button>
               ))}
             </div>
             <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-              <div style={{ background: config.safeMode?"rgba(0,229,160,0.1)":"rgba(255,77,109,0.1)", border:`1px solid ${config.safeMode?"rgba(0,229,160,0.2)":"rgba(255,77,109,0.2)"}`, borderRadius:20, padding:"3px 10px", fontSize:10, color: config.safeMode?"#00e5a0":"#ff4d6d", fontFamily:"'Syne',sans-serif", fontWeight:700 }}>
+              <div style={{
+                ...glassTint(config.safeMode ? "10,132,255" : "255,77,109", 0.12),
+                borderRadius:20, padding:"3px 10px", fontSize:10,
+                color: config.safeMode?ACCENT_GLOW:DANGER,
+                fontFamily:"'Syne',sans-serif", fontWeight:700,
+              }}>
                 {config.safeMode?"🛡 SAFE":"⚡ DYN"}
               </div>
-              <div style={{ width:8, height:8, borderRadius:"50%", background: !connected ? "#555" : killSwitchActive?"#ff4d6d":"#00e5a0", boxShadow: connected ? `0 0 8px ${killSwitchActive?"#ff4d6d":"#00e5a0"}` : "none" }} title={connected ? "Bridge connected" : "Bridge offline"} />
+              <div style={{ width:8, height:8, borderRadius:"50%", background: !connected ? "#556" : killSwitchActive?DANGER:ACCENT, boxShadow: connected ? `0 0 8px ${killSwitchActive?DANGER:ACCENT}` : "none" }} title={connected ? "Bridge connected" : "Bridge offline"} />
             </div>
           </div>
 
           <div style={{ padding:"20px 20px 0", maxWidth:1100, margin:"0 auto" }}>
 
             {!connected && (
-              <div style={{ background:"rgba(255,77,109,0.08)", border:"1px solid rgba(255,77,109,0.2)", borderRadius:14, padding:"14px 18px", marginBottom:16, fontSize:13, color:"#ff4d6d" }}>
+              <div style={glassTint("255,77,109", 0.1, { borderRadius:16, padding:"14px 18px", marginBottom:16, fontSize:13, color:DANGER })}>
                 ⛔ Not connected to the MT5 bridge at <strong>{bridgeUrl}</strong>. Set the correct address in the Config tab and make sure <code>mt5_bridge.py</code> is running on your trading PC.
               </div>
             )}
@@ -450,53 +643,61 @@
               <div style={{ display:"flex", flexDirection:"column", gap:16, animation:"fadeIn 0.3s both" }}>
                 <SafeModeBanner safeMode={config.safeMode} onToggle={v => pushConfig({safeMode:v})} />
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:12 }}>
-                  {SC("Balance",`${account.currency||"$"} ${(account.balance||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`,"MT5 Live")}
-                  {SC("Floating P&L",`${totalProfit>=0?"+":""}$${totalProfit.toFixed(2)}`,`${trades.length} open`, totalProfit>=0?"#00e5a0":"#ff4d6d")}
-                  {SC("Lot Size",config.safeMode ? String(config.fixedLots) : "dynamic",config.safeMode?"Safe Mode":"Dynamic","#00e5a0")}
+                  {SC("Balance",`${account.currency||"$"} ${(account.balance||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`,"MT5 Live","#fff", usdZarRate ? fmtZar(account.balance * usdZarRate) : null)}
+                  {SC("Floating P&L",`${totalProfit>=0?"+":""}$${totalProfit.toFixed(2)}`,`${trades.length} open`, totalProfit>=0?ACCENT_GLOW:DANGER, usdZarRate ? fmtZar(totalProfit * usdZarRate, true) : null)}
+                  {SC("Lot Size",config.safeMode ? String(config.fixedLots) : "dynamic",config.safeMode?"Safe Mode":"Dynamic",ACCENT_GLOW)}
                   {SC("Positions",`${trades.length}/${config.maxPositions}`,"open / max")}
                 </div>
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-                  <DailyLossMeter dailyLoss={session.daily_loss_usd||0} dailyLossLimit={config.maxDailyLossPct} openingBalance={session.opening_balance||0} />
-                  <LossStreak consecutive={session.consecutive_losses||0} maxAllowed={config.maxConsecLosses} onReset={resetLosses} />
+
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:12 }}>
+                  <RealizedCard label="Realized Today" usd={realizedToday} zar={usdZarRate ? realizedToday * usdZarRate : null} />
+                  <RealizedCard label="Realized All-Time" usd={realizedAllTime} zar={usdZarRate ? realizedAllTime * usdZarRate : null} />
                 </div>
+
+                <DailyLossMeter dailyLoss={session.daily_loss_usd||0} dailyLossLimit={config.maxDailyLossPct} openingBalance={session.opening_balance||0} />
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+                  <LossStreak consecutive={session.consecutive_losses||0} maxAllowed={config.maxConsecLosses} onReset={resetLosses} />
+                  <WinStreak streak={winStreak} />
+                </div>
+
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:10 }}>
                   {SYMBOLS.map(sym => {
                     const d = prices[sym];
                     if (!d) return null;
                     return (
-                      <div key={sym} style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:12, padding:"12px 14px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                      <div key={sym} style={glass({ borderRadius:14, padding:"12px 14px", display:"flex", justifyContent:"space-between", alignItems:"center" })}>
                         <div>
                           <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:12 }}>{sym}</div>
-                          <div style={{ fontSize:16, fontWeight:500, marginTop:3, color:"#ddd" }}>{d.bid}</div>
-                          <div style={{ fontSize:10, color:"#555", marginTop:2 }}>ask {d.ask}</div>
+                          <div style={{ fontSize:16, fontWeight:500, marginTop:3, color:"#e2e6ea" }}>{d.bid}</div>
+                          <div style={{ fontSize:10, color:"#6b7280", marginTop:2 }}>ask {d.ask}</div>
                         </div>
-                        <Spark positive={true} />
+                        <Spark />
                       </div>
                     );
                   })}
                 </div>
-                <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:16, overflow:"hidden" }}>
-                  <div style={{ padding:"14px 18px", borderBottom:"1px solid rgba(255,255,255,0.05)", fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:14 }}>Open Positions</div>
-                  {trades.length === 0 && <div style={{ padding:"18px", fontSize:12, color:"#444" }}>No open positions</div>}
+                <div style={glass({ borderRadius:18, overflow:"hidden" })}>
+                  <div style={{ padding:"14px 18px", borderBottom:"1px solid rgba(255,255,255,0.08)", fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:14 }}>Open Positions</div>
+                  {trades.length === 0 && <div style={{ padding:"18px", fontSize:12, color:"#556" }}>No open positions</div>}
                   {trades.map(t => (
-                    <div key={t.id} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 18px", borderBottom:"1px solid rgba(255,255,255,0.03)", fontSize:12, flexWrap:"wrap", gap:8 }}>
+                    <div key={t.id} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 18px", borderBottom:"1px solid rgba(255,255,255,0.05)", fontSize:12, flexWrap:"wrap", gap:8 }}>
                       <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:700 }}>{t.symbol}</div>
-                      <div style={{ color: t.type==="BUY"?"#00e5a0":"#ff4d6d", fontWeight:700 }}>{t.type}</div>
-                      <div style={{ color:"#555" }}>{t.lots} lots</div>
-                      <div style={{ color:"#888" }}>@ {t.openPrice}</div>
-                      <div style={{ color: t.profit>=0?"#00e5a0":"#ff4d6d", fontWeight:700 }}>{t.profit>=0?"+":""}${t.profit.toFixed(2)}</div>
-                      <button onClick={() => closeTrade(t.id)} style={{ background:"rgba(255,77,109,0.1)", border:"1px solid rgba(255,77,109,0.2)", borderRadius:6, padding:"4px 10px", color:"#ff4d6d", cursor:"pointer", fontSize:11, fontFamily:"'Syne',sans-serif" }}>Close</button>
+                      <div style={{ color: t.type==="BUY"?ACCENT_GLOW:DANGER, fontWeight:700 }}>{t.type}</div>
+                      <div style={{ color:"#6b7280" }}>{t.lots} lots</div>
+                      <div style={{ color:"#8a93a3" }}>@ {t.openPrice}</div>
+                      <div style={{ color: t.profit>=0?ACCENT_GLOW:DANGER, fontWeight:700 }}>{t.profit>=0?"+":""}${t.profit.toFixed(2)}</div>
+                      <button onClick={() => closeTrade(t.id)} style={{ ...glassTint("255,77,109", 0.12), borderRadius:8, padding:"4px 10px", color:DANGER, cursor:"pointer", fontSize:11, fontFamily:"'Syne',sans-serif" }}>Close</button>
                     </div>
                   ))}
                 </div>
-                <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:16, padding:18 }}>
+                <div style={glass({ borderRadius:18, padding:18 })}>
                   <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:14, marginBottom:12 }}>Activity Log</div>
                   <div style={{ maxHeight:160, overflowY:"auto", display:"flex", flexDirection:"column", gap:5 }}>
                     {log.map((l,i) => (
                       <div key={i} style={{ display:"flex", gap:10, fontSize:11 }}>
-                        <span style={{ color:"#333", minWidth:64 }}>{l.time}</span>
-                        <span style={{ color: l.type==="trade"||l.type==="win"?"#00e5a0":l.type==="loss"||l.type==="warn"?"#ff4d6d":"#555" }}>{l.type==="trade"?"◆":l.type==="win"?"✓":l.type==="loss"?"✕":l.type==="warn"?"⚠":"·"}</span>
-                        <span style={{ color:"#666" }}>{l.msg}</span>
+                        <span style={{ color:"#556", minWidth:64 }}>{l.time}</span>
+                        <span style={{ color: l.type==="trade"||l.type==="win"?ACCENT_GLOW:l.type==="loss"||l.type==="warn"?DANGER:"#6b7280" }}>{l.type==="trade"?"◆":l.type==="win"?"✓":l.type==="loss"?"✕":l.type==="warn"?"⚠":"·"}</span>
+                        <span style={{ color:"#8a93a3" }}>{l.msg}</span>
                       </div>
                     ))}
                   </div>
@@ -512,64 +713,85 @@
               </div>
             )}
 
+            {/* GOALS */}
+            {activeTab==="goals" && (
+              <div style={{ display:"flex", flexDirection:"column", gap:16, animation:"fadeIn 0.3s both" }}>
+                <div style={glassTint("10,132,255", 0.08, { borderRadius:16, padding:"14px 18px", fontSize:13, color:"#b8c0cc" })}>
+                  🎯 Set a target and trade toward it. Progress tracks your current MT5 balance against each goal.
+                </div>
+                {goals.length === 0 && (
+                  <div style={{ textAlign:"center", padding:"20px 0", color:"#556", fontSize:13 }}>No goals yet — add your first one below.</div>
+                )}
+                {goals.map(g => (
+                  <GoalCard key={g.id} goal={g} balance={account.balance||0} usdZarRate={usdZarRate} onDelete={deleteGoal} />
+                ))}
+                <AddGoalForm onAdd={addGoal} />
+              </div>
+            )}
+
             {/* CONFIG */}
             {activeTab==="config" && (
               <div style={{ display:"flex", flexDirection:"column", gap:18, animation:"fadeIn 0.3s both" }}>
-                <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:16, padding:22 }}>
+                <div style={glass({ borderRadius:18, padding:22 })}>
                   <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:15, marginBottom:4 }}>Lot Size Protection</div>
-                  <div style={{ fontSize:12, color:"#555", marginBottom:14 }}>Safe Mode is the most important setting.</div>
+                  <div style={{ fontSize:12, color:"#6b7280", marginBottom:14 }}>Safe Mode is the most important setting.</div>
                   <Toggle value={config.safeMode} onChange={v => pushConfig({safeMode:v})} label="Safe Mode — Fixed Lots" sublabel="Every trade uses exactly the fixed lot size below." />
                   <div style={{ marginTop:14 }}>
-                    <label style={{ fontSize:11, color:"#555", letterSpacing:"0.1em", textTransform:"uppercase", display:"block", marginBottom:8 }}>Fixed lot size</label>
+                    <label style={{ fontSize:11, color:"#6b7280", letterSpacing:"0.1em", textTransform:"uppercase", display:"block", marginBottom:8 }}>Fixed lot size</label>
                     <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-                      <input type="range" min={0.01} max={1.0} step={0.01} value={config.fixedLots} onChange={e => pushConfig({fixedLots:parseFloat(e.target.value)})} style={{ flex:1, accentColor:"#00e5a0", background:"rgba(0,229,160,0.2)" }} />
-                      <span style={{ minWidth:60, color:"#00e5a0", fontFamily:"'Syne',sans-serif", fontWeight:700 }}>{config.fixedLots} lots</span>
+                      <input type="range" min={0.01} max={1.0} step={0.01} value={config.fixedLots} onChange={e => pushConfig({fixedLots:parseFloat(e.target.value)})} style={{ flex:1, accentColor:ACCENT, background:"rgba(10,132,255,0.2)" }} />
+                      <span style={{ minWidth:60, color:ACCENT_GLOW, fontFamily:"'Syne',sans-serif", fontWeight:700 }}>{config.fixedLots} lots</span>
                     </div>
                   </div>
                 </div>
 
-                <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:16, padding:22 }}>
+                <div style={glass({ borderRadius:18, padding:22 })}>
                   <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:15, marginBottom:14 }}>Kill Switches</div>
                   {[{label:"Max Daily Loss %",key:"maxDailyLossPct",min:0.5,max:10,step:0.5,suffix:"%"},{label:"Max Loss Per Trade ($)",key:"maxLossPerTrade",min:1,max:100,step:1,suffix:"$"},{label:"Max Consecutive Losses",key:"maxConsecLosses",min:1,max:10,step:1,suffix:""}].map(f => (
                     <div key={f.key} style={{ marginBottom:16 }}>
-                      <label style={{ fontSize:11, color:"#555", letterSpacing:"0.1em", textTransform:"uppercase", display:"block", marginBottom:8 }}>{f.label}</label>
+                      <label style={{ fontSize:11, color:"#6b7280", letterSpacing:"0.1em", textTransform:"uppercase", display:"block", marginBottom:8 }}>{f.label}</label>
                       <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-                        <input type="range" min={f.min} max={f.max} step={f.step} value={config[f.key]} onChange={e => pushConfig({[f.key]:parseFloat(e.target.value)})} style={{ flex:1, accentColor:"#ff4d6d", background:"rgba(255,77,109,0.15)" }} />
-                        <span style={{ minWidth:60, color:"#ff4d6d", fontFamily:"'Syne',sans-serif", fontWeight:700 }}>{f.suffix==="$"?`$${config[f.key]}`:`${config[f.key]}${f.suffix}`}</span>
+                        <input type="range" min={f.min} max={f.max} step={f.step} value={config[f.key]} onChange={e => pushConfig({[f.key]:parseFloat(e.target.value)})} style={{ flex:1, accentColor:DANGER, background:"rgba(255,77,109,0.15)" }} />
+                        <span style={{ minWidth:60, color:DANGER, fontFamily:"'Syne',sans-serif", fontWeight:700 }}>{f.suffix==="$"?`$${config[f.key]}`:`${config[f.key]}${f.suffix}`}</span>
                       </div>
                     </div>
                   ))}
                 </div>
 
-                <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:16, padding:22 }}>
+                <div style={glass({ borderRadius:18, padding:22 })}>
                   <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:15, marginBottom:14 }}>Trade Quality Filters</div>
                   {[{label:"Min AI Confidence",key:"minConfidence",min:50,max:100,step:5,suffix:"%"},{label:"Stop-Loss (pips)",key:"slPips",min:10,max:200,step:5,suffix:" pips"},{label:"Take-Profit Ratio",key:"tpRatio",min:1,max:5,step:0.5,suffix:":1"},{label:"Max Positions",key:"maxPositions",min:1,max:10,step:1,suffix:""}].map(f => (
                     <div key={f.key} style={{ marginBottom:16 }}>
-                      <label style={{ fontSize:11, color:"#555", letterSpacing:"0.1em", textTransform:"uppercase", display:"block", marginBottom:8 }}>{f.label}</label>
+                      <label style={{ fontSize:11, color:"#6b7280", letterSpacing:"0.1em", textTransform:"uppercase", display:"block", marginBottom:8 }}>{f.label}</label>
                       <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-                        <input type="range" min={f.min} max={f.max} step={f.step} value={config[f.key]} onChange={e => pushConfig({[f.key]:parseFloat(e.target.value)})} style={{ flex:1, accentColor:"#00e5a0", background:"rgba(0,229,160,0.15)" }} />
-                        <span style={{ minWidth:60, color:"#00e5a0", fontFamily:"'Syne',sans-serif", fontWeight:700 }}>{config[f.key]}{f.suffix}</span>
+                        <input type="range" min={f.min} max={f.max} step={f.step} value={config[f.key]} onChange={e => pushConfig({[f.key]:parseFloat(e.target.value)})} style={{ flex:1, accentColor:ACCENT, background:"rgba(10,132,255,0.15)" }} />
+                        <span style={{ minWidth:60, color:ACCENT_GLOW, fontFamily:"'Syne',sans-serif", fontWeight:700 }}>{config[f.key]}{f.suffix}</span>
                       </div>
                     </div>
                   ))}
                 </div>
 
-                <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:16, padding:22 }}>
+                <div style={glass({ borderRadius:18, padding:22 })}>
                   <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:15, marginBottom:4 }}>MT5 Bridge Connection</div>
-                  <div style={{ fontSize:12, color:"#555", marginBottom:14 }}>IP address of your trading PC on the same WiFi, e.g. http://192.168.x.x:8000</div>
+                  <div style={{ fontSize:12, color:"#6b7280", marginBottom:14 }}>IP address of your trading PC on the same WiFi, e.g. http://192.168.x.x:8000</div>
                   <div style={{ display:"flex", gap:10 }}>
-                    <input value={bridgeInput} onChange={e => { setBridgeInput(e.target.value); setBridgeSaved(false); }} style={{ flex:1, background:"rgba(255,255,255,0.04)", border:`1px solid ${bridgeSaved?"rgba(255,255,255,0.1)":"rgba(245,197,24,0.4)"}`, borderRadius:8, padding:"10px 14px", color:"#00e5a0", fontFamily:"'JetBrains Mono',monospace", fontSize:13 }} />
-                    <button onClick={saveBridgeUrl} disabled={bridgeSaved} style={{ background: bridgeSaved?"rgba(255,255,255,0.04)":"linear-gradient(135deg,#00e5a0,#00b37d)", border: bridgeSaved?"1px solid rgba(255,255,255,0.08)":"none", borderRadius:8, padding:"10px 18px", cursor: bridgeSaved?"default":"pointer", color: bridgeSaved?"#444":"#001a12", fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:13, whiteSpace:"nowrap" }}>
+                    <input value={bridgeInput} onChange={e => { setBridgeInput(e.target.value); setBridgeSaved(false); }} style={{ flex:1, background:"rgba(255,255,255,0.06)", backdropFilter:"blur(12px)", border:`1px solid ${bridgeSaved?"rgba(255,255,255,0.14)":"rgba(245,197,24,0.4)"}`, borderRadius:10, padding:"10px 14px", color:ACCENT_GLOW, fontFamily:"'JetBrains Mono',monospace", fontSize:13 }} />
+                    <button onClick={saveBridgeUrl} disabled={bridgeSaved} style={{
+                      background: bridgeSaved?"rgba(255,255,255,0.05)":`linear-gradient(135deg, ${ACCENT}, ${ACCENT_DEEP})`,
+                      border: bridgeSaved?"1px solid rgba(255,255,255,0.1)":"1px solid rgba(255,255,255,0.18)",
+                      boxShadow: bridgeSaved ? "none" : "0 4px 16px rgba(10,132,255,0.4)",
+                      borderRadius:10, padding:"10px 18px", cursor: bridgeSaved?"default":"pointer", color: bridgeSaved?"#556":"#fff", fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:13, whiteSpace:"nowrap",
+                    }}>
                       {bridgeSaved?"✓ Saved":"Save URL"}
                     </button>
                   </div>
-                  {!bridgeSaved && <div style={{ marginTop:8, fontSize:11, color:"#f5c518" }}>⚠ Unsaved — tap Save URL to apply</div>}
-                  {bridgeSaved  && <div style={{ marginTop:8, fontSize:11, color: connected ? "#00e5a0" : "#ff4d6d" }}>{connected ? "● Connected" : "● Offline"} — {bridgeUrl}</div>}
+                  {!bridgeSaved && <div style={{ marginTop:8, fontSize:11, color:WARN }}>⚠ Unsaved — tap Save URL to apply</div>}
+                  {bridgeSaved  && <div style={{ marginTop:8, fontSize:11, color: connected ? ACCENT_GLOW : DANGER }}>{connected ? "● Connected" : "● Offline"} — {bridgeUrl}</div>}
                 </div>
 
-                <div style={{ background:"rgba(245,197,24,0.06)", border:"1px solid rgba(245,197,24,0.15)", borderRadius:14, padding:16 }}>
-                  <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:700, color:"#f5c518", marginBottom:6 }}>⚠ Reminder</div>
-                  <p style={{ fontSize:12, color:"#888", lineHeight:1.7 }}>Always validate on a demo account first. Keep Safe Mode ON until you've seen 20+ agent trades you're happy with. This page must be served over plain HTTP on your local network — it cannot reach the bridge from an HTTPS page.</p>
+                <div style={glassTint("245,197,24", 0.06, { borderRadius:16, padding:16 })}>
+                  <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:700, color:WARN, marginBottom:6 }}>⚠ Reminder</div>
+                  <p style={{ fontSize:12, color:"#8a93a3", lineHeight:1.7 }}>Always validate on a demo account first. Keep Safe Mode ON until you've seen 20+ agent trades you're happy with. This page must be served over plain HTTP on your local network — it cannot reach the bridge from an HTTPS page.</p>
                 </div>
               </div>
             )}

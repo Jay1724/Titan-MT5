@@ -187,14 +187,21 @@ def check_kill_switches(balance: float) -> tuple[bool, str | None]:
     return False, None
 
 
+def calculate_pnl_usd(symbol: str, lots: float, price_diff: float) -> float:
+    """Estimate dollar P&L for a given price distance and lot size."""
+    info = mt5.symbol_info(symbol)
+    if info is None or price_diff <= 0:
+        return 0.0
+    pips = price_diff / info.point / 10
+    pip_value = info.trade_tick_value * (info.point / info.trade_tick_size) if info.trade_tick_size else 0
+    return pips * pip_value * lots * 10
+
+
 def estimate_sl_risk_usd(symbol: str, action: str, lots: float, sl: float, entry: float) -> float:
     """Estimate the dollar risk if SL is hit."""
-    info = mt5.symbol_info(symbol)
-    if info is None or sl == 0:
+    if sl == 0:
         return 0.0
-    pips_at_risk = abs(entry - sl) / info.point / 10
-    pip_value = info.trade_tick_value * (info.point / info.trade_tick_size) if info.trade_tick_size else 0
-    return pips_at_risk * pip_value * lots * 10
+    return calculate_pnl_usd(symbol, lots, abs(entry - sl))
 
 
 def record_trade_result(profit: float):
@@ -505,6 +512,25 @@ Respond ONLY in JSON, no markdown, no preamble:
         "trades_today":        SESSION["trades_today"],
         "blocked_reason":      SESSION["blocked_reason"],
     }
+
+    # ── Estimate potential $ / R gain-loss per signal ───────────────────────
+    usdzar_rate = prices.get("USDZARm", {}).get("bid")
+    for sig in analysis.get("signals", []):
+        if sig.get("action") == "HOLD":
+            continue
+        tick = prices.get(sig.get("symbol"))
+        sl, tp = sig.get("estimatedSL") or 0, sig.get("estimatedTP") or 0
+        lots = sig.get("suggestedLots") or RISK_CONFIG["fixed_lots"]
+        if not tick or not sl or not tp:
+            continue
+        entry = tick["ask"] if sig["action"] == "BUY" else tick["bid"]
+        gain_usd = calculate_pnl_usd(sig["symbol"], lots, abs(tp - entry))
+        loss_usd = calculate_pnl_usd(sig["symbol"], lots, abs(entry - sl))
+        sig["potentialGainUsd"] = round(gain_usd, 2)
+        sig["potentialLossUsd"] = round(loss_usd, 2)
+        if usdzar_rate:
+            sig["potentialGainZar"] = round(gain_usd * usdzar_rate, 2)
+            sig["potentialLossZar"] = round(loss_usd * usdzar_rate, 2)
 
     # Auto-execute high-confidence signals
     if auto_execute:
