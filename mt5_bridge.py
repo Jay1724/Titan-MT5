@@ -39,12 +39,12 @@ load_dotenv()
 
 # ── Credentials ────────────────────────────────────────────────────────────────
 
-MT5_LOGIN     = int(os.getenv("MT5_LOGIN", "0"))
+MT5_LOGIN     = int(os.getenv("MT5_LOGIN", "0") or "0")
 MT5_PASSWORD  = os.getenv("MT5_PASSWORD", "")
 MT5_SERVER    = os.getenv("MT5_SERVER", "")
 ANTHROPIC_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 
-WATCHED_SYMBOLS = ["XAUUSD", "EURUSD", "USDZAR", "XAGUSD", "USOIL"]
+WATCHED_SYMBOLS = ["XAUUSDm", "EURUSDm", "USDZARm", "XAGUSDm", "USOILm"]
 
 # ── Risk Configuration ─────────────────────────────────────────────────────────
 # Edit these defaults. All can also be changed at runtime via PUT /config.
@@ -227,6 +227,11 @@ def get_account() -> dict:
 def get_prices(symbols: list[str]) -> dict:
     result = {}
     for sym in symbols:
+        info = mt5.symbol_info(sym)
+        if info is None:
+            continue
+        if not info.visible:
+            mt5.symbol_select(sym, True)
         tick = mt5.symbol_info_tick(sym)
         if tick:
             result[sym] = {
@@ -456,12 +461,14 @@ RISK PARAMETERS:
 - Min confidence to auto-execute: {RISK_CONFIG['min_confidence']}%
 - Max loss per trade: ${RISK_CONFIG['max_loss_per_trade_usd']:.2f}
 
+Use the exact symbol names as given in MARKET DATA above (including any broker suffix) — do not shorten or rewrite them.
+
 Respond ONLY in JSON, no markdown, no preamble:
 {{
   "summary": "2-sentence market overview",
   "signals": [
     {{
-      "symbol": "XAUUSD",
+      "symbol": "{WATCHED_SYMBOLS[0]}",
       "action": "BUY|SELL|HOLD",
       "confidence": 0-100,
       "rationale": "concise reason based on price action",
@@ -474,15 +481,21 @@ Respond ONLY in JSON, no markdown, no preamble:
   "overallSentiment": "BULLISH|BEARISH|NEUTRAL"
 }}"""
 
-    message = ai_client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=1000,
-        messages=[{"role": "user", "content": prompt}],
-    )
+    try:
+        message = ai_client.messages.create(
+            model="claude-sonnet-5",
+            max_tokens=2000,
+            messages=[{"role": "user", "content": prompt}],
+        )
+    except anthropic.APIError as e:
+        raise HTTPException(502, f"Anthropic API error: {e}")
 
-    raw   = message.content[0].text
+    raw = next((b.text for b in message.content if b.type == "text"), "")
     clean = raw.replace("```json", "").replace("```", "").strip()
-    analysis = json.loads(clean)
+    try:
+        analysis = json.loads(clean)
+    except json.JSONDecodeError as e:
+        raise HTTPException(502, f"AI returned non-JSON response: {e}. Raw: {raw[:300]}")
     analysis["timestamp"]        = datetime.now().isoformat()
     analysis["account_snapshot"] = account
     analysis["session"]          = {
@@ -563,7 +576,14 @@ async def analyse(auto_execute: bool = False):
     ?auto_execute=true — agent places trades if confidence >= min_confidence
                          and all kill switches are clear.
     """
-    return await run_ai_analysis(auto_execute=auto_execute)
+    try:
+        return await run_ai_analysis(auto_execute=auto_execute)
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(500, f"{type(e).__name__}: {e}")
 
 @app.get("/config")
 def get_config():
