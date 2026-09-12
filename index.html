@@ -37,7 +37,7 @@
   <script type="text/babel">
     const { useState, useEffect, useCallback, useRef } = React;
 
-    const SYMBOLS = ["XAUUSDm", "EURUSDm", "USDZARm", "XAGUSDm", "USOILm"];
+    const SYMBOLS = ["XAUUSDm", "EURUSDm", "USDZARm", "XAGUSDm", "USOILm", "BTCUSDm", "ETHUSDm", "XRPUSDm"];
     const DEFAULT_BRIDGE_URL = "http://192.168.8.132:8000";
     const POLL_MS = 4000;
 
@@ -226,6 +226,120 @@
           <div style={{ fontSize:10, color:"#6b7280", letterSpacing:"0.12em", textTransform:"uppercase", fontFamily:"'Syne',sans-serif" }}>{label}</div>
           <div style={{ fontSize:22, fontWeight:800, color, fontFamily:"'Syne',sans-serif", marginTop:5 }}>{fmtUsd(usd, true)}</div>
           {zar != null && <div style={{ fontSize:11, color:"#6b7280", marginTop:4 }}>≈ {fmtZar(zar, true)}</div>}
+        </div>
+      );
+    }
+
+    function NewsBox({ bridgeUrl, connected }) {
+      const [news, setNews] = useState(null);
+      const [lockouts, setLockouts] = useState({});
+      const [draft, setDraft] = useState("");
+      const [editing, setEditing] = useState(false);
+      const [saving, setSaving] = useState(false);
+      const [parseError, setParseError] = useState(null);
+
+      const load = useCallback(() => {
+        if (!connected) return;
+        bridgeFetch(bridgeUrl, "/news").then(n => setNews(n && n.generated_at ? n : null)).catch(() => {});
+        bridgeFetch(bridgeUrl, "/news/lockouts").then(setLockouts).catch(() => {});
+      }, [bridgeUrl, connected]);
+
+      useEffect(() => { load(); const iv = setInterval(load, 60000); return () => clearInterval(iv); }, [load]);
+
+      const submit = async () => {
+        setParseError(null);
+        let payload;
+        try { payload = JSON.parse(draft); } catch (e) { setParseError("Not valid JSON — paste Atlas's briefing exactly as given."); return; }
+        setSaving(true);
+        try {
+          const result = await bridgeFetch(bridgeUrl, "/news", { method: "POST", body: JSON.stringify(payload) });
+          setNews(result);
+          setDraft("");
+          setEditing(false);
+          load();
+        } catch (e) { setParseError(e.message); }
+        setSaving(false);
+      };
+
+      const ageHours = news?.received_at ? (Date.now() - new Date(news.received_at).getTime()) / 3600000 : null;
+      const stale = ageHours != null && ageHours >= 6;
+      const riskColor = { low: ACCENT_GLOW, moderate: WARN, elevated: WARN, high: DANGER, severe: DANGER }[(news?.risk_level||"").toLowerCase()] || "#8a93a3";
+      const lockoutSyms = Object.keys(lockouts);
+
+      return (
+        <div style={glass({ borderRadius:18, padding:20 })}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+            <div>
+              <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:15 }}>Market News — Atlas</div>
+              <div style={{ fontSize:11, color:"#6b7280", marginTop:2 }}>Fed into every analysis; event lockouts auto-block trades</div>
+            </div>
+            <button onClick={() => { setEditing(e => !e); setParseError(null); }} style={{ ...glassTint("37,99,235", 0.1), borderRadius:8, padding:"5px 12px", color:ACCENT_GLOW, cursor:"pointer", fontFamily:"'Syne',sans-serif", fontWeight:600, fontSize:11 }}>
+              {editing ? "Cancel" : news ? "Update" : "+ Add"}
+            </button>
+          </div>
+
+          {lockoutSyms.length > 0 && (
+            <div style={glassTint("255,77,109", 0.12, { borderRadius:10, padding:"10px 14px", marginBottom:10, fontSize:12, color:DANGER })}>
+              🚨 Locked out right now: {lockoutSyms.map(s => `${s} (${lockouts[s]})`).join(" · ")}
+            </div>
+          )}
+
+          {!editing && news && (
+            <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+              <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                <span style={{ fontSize:10, fontWeight:700, letterSpacing:"0.06em", padding:"2px 8px", borderRadius:6, color: riskColor, background: `${riskColor}22` }}>
+                  {(news.risk_level||"unknown").toUpperCase()} RISK
+                </span>
+                <span style={{ fontSize:11, color: stale ? WARN : "#556" }}>{ageHours < 1 ? "just now" : `${ageHours.toFixed(0)}h ago`}{stale ? " · may be stale" : ""}</span>
+              </div>
+              {news.risk_summary && <div style={{ fontSize:12, color:"#b8c0cc", lineHeight:1.6 }}>{news.risk_summary}</div>}
+
+              {news.events?.length > 0 && (
+                <div>
+                  <div style={{ fontSize:10, color:"#6b7280", letterSpacing:"0.08em", textTransform:"uppercase", marginBottom:6 }}>Upcoming Events</div>
+                  <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+                    {news.events.map((ev, i) => {
+                      const t = ev.time_utc ? new Date(ev.time_utc) : null;
+                      const hrs = t ? (t.getTime() - Date.now()) / 3600000 : null;
+                      return (
+                        <div key={i} style={{ fontSize:11, color:"#8a93a3", display:"flex", justifyContent:"space-between", gap:8 }}>
+                          <span>{ev.event} <span style={{ color:"#556" }}>({ev.currency})</span></span>
+                          <span style={{ color: hrs != null && hrs < 24 && hrs > 0 ? WARN : "#556", whiteSpace:"nowrap" }}>{hrs != null ? (hrs > 0 ? `in ${hrs.toFixed(1)}h` : "past") : "time TBD"}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {news.headline_flags?.length > 0 && (
+                <div>
+                  <div style={{ fontSize:10, color:"#6b7280", letterSpacing:"0.08em", textTransform:"uppercase", marginBottom:6 }}>Headlines</div>
+                  <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+                    {news.headline_flags.map((h, i) => (
+                      <div key={i} style={{ fontSize:11, color: h.severity==="high"?DANGER:"#8a93a3" }}>• {h.headline}</div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          {!editing && !news && (
+            <div style={{ fontSize:12, color:"#556" }}>No Atlas briefing loaded — Titan is trading on price/technicals only.</div>
+          )}
+
+          {editing && (
+            <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+              <textarea value={draft} onChange={e => setDraft(e.target.value)} placeholder="Paste Atlas's JSON briefing here…" rows={8}
+                style={{ background:"rgba(255,255,255,0.06)", backdropFilter:"blur(12px)", border:"1px solid rgba(255,255,255,0.14)", borderRadius:10, padding:"10px 14px", color:"#fff", fontFamily:"'JetBrains Mono',monospace", fontSize:11, resize:"vertical" }} />
+              {parseError && <div style={{ fontSize:11, color:DANGER }}>{parseError}</div>}
+              <button onClick={submit} disabled={saving || !draft.trim()} style={{
+                background: ACCENT, border:"1px solid rgba(255,255,255,0.12)", borderRadius:10, padding:"10px 18px",
+                cursor: saving || !draft.trim() ? "not-allowed" : "pointer", color:"#fff",
+                fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:13, opacity: saving || !draft.trim() ? 0.6 : 1,
+              }}>{saving ? "Saving…" : "Save Briefing"}</button>
+            </div>
+          )}
         </div>
       );
     }
@@ -813,6 +927,7 @@
             {activeTab==="agent" && (
               <div style={{ display:"flex", flexDirection:"column", gap:16, animation:"fadeIn 0.3s both" }}>
                 <SafeModeBanner safeMode={config.safeMode} onToggle={v => pushConfig({safeMode:v})} />
+                <NewsBox bridgeUrl={bridgeUrl} connected={connected} />
                 <AgentPanel bridgeUrl={bridgeUrl} connected={connected} config={{...config, dailyLoss:session.daily_loss_usd||0, consecutiveLosses:session.consecutive_losses||0}} onTrade={handleTrade} killSwitchActive={killSwitchActive} agentPaused={agentPaused} autoExecute={autoExecute} onAutoExecuteChange={setAutoExecute} />
               </div>
             )}

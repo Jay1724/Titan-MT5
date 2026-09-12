@@ -25,7 +25,7 @@ Starts on http://localhost:8000
 import os
 import json
 import sqlite3
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from typing import Optional
 from contextlib import asynccontextmanager, closing
 
@@ -45,7 +45,7 @@ MT5_PASSWORD  = os.getenv("MT5_PASSWORD", "")
 MT5_SERVER    = os.getenv("MT5_SERVER", "")
 ANTHROPIC_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 
-WATCHED_SYMBOLS = ["XAUUSDm", "EURUSDm", "USDZARm", "XAGUSDm", "USOILm"]
+WATCHED_SYMBOLS = ["XAUUSDm", "EURUSDm", "USDZARm", "XAGUSDm", "USOILm", "BTCUSDm", "ETHUSDm", "XRPUSDm"]
 
 # ── Risk Configuration ─────────────────────────────────────────────────────────
 # Edit these defaults. All can also be changed at runtime via PUT /config.
@@ -85,6 +85,80 @@ SESSION = {
     "blocked_reason": None,      # Set when kill switch fires
     "opening_balance": None,     # Captured on first trade of the day
 }
+
+# ── News context (Atlas's structured economic-calendar feed; persists across restarts) ─
+
+NEWS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "titan_news.json")
+
+# 3-letter codes we look for inside a broker symbol (minus its "m" suffix) to
+# decide which watched instruments a currency-tagged news event affects.
+CURRENCY_CODES = ["USD", "EUR", "GBP", "JPY", "CAD", "CHF", "AUD", "NZD", "ZAR", "XAU", "XAG", "BTC", "ETH", "XRP"]
+
+
+def save_news(payload: dict) -> dict:
+    payload = dict(payload)
+    payload["received_at"] = datetime.now().isoformat()
+    with open(NEWS_PATH, "w", encoding="utf-8") as f:
+        json.dump(payload, f)
+    return payload
+
+
+def load_news() -> Optional[dict]:
+    if not os.path.exists(NEWS_PATH):
+        return None
+    try:
+        with open(NEWS_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
+def _parse_utc(ts: str) -> Optional[datetime]:
+    if not ts:
+        return None
+    try:
+        return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def symbol_currencies(symbol: str) -> set:
+    """Which currency/metal codes a broker symbol (e.g. XAUUSDm) is exposed to."""
+    base = symbol[:-1] if symbol.lower().endswith("m") else symbol
+    base = base.upper()
+    codes = {c for c in CURRENCY_CODES if c in base}
+    if "OIL" in base:
+        codes.add("USD")  # oil is USD-denominated regardless of ticker spelling
+    return codes
+
+
+def get_active_lockouts(symbols: list[str]) -> dict:
+    """
+    Returns {symbol: reason} for any watched symbol currently inside a news
+    event's lockout window (event time ± lockout_minutes_before/after).
+    """
+    news = load_news()
+    if not news or not news.get("events"):
+        return {}
+    now = datetime.now(timezone.utc)
+    locked = {}
+    for event in news["events"]:
+        event_time = _parse_utc(event.get("time_utc"))
+        if event_time is None:
+            continue  # e.g. BOJ's "no fixed release time" — can't enforce a window
+        before = event.get("lockout_minutes_before", 0) or 0
+        after  = event.get("lockout_minutes_after", 0) or 0
+        window_start = event_time.timestamp() - before * 60
+        window_end   = event_time.timestamp() + after * 60
+        if not (window_start <= now.timestamp() <= window_end):
+            continue
+        currency = (event.get("currency") or "").upper()
+        for sym in symbols:
+            if currency and currency in symbol_currencies(sym) and sym not in locked:
+                mins_left = round((window_end - now.timestamp()) / 60)
+                locked[sym] = f"News lockout: {event.get('event', currency)} ({mins_left}m left in window)"
+    return locked
+
 
 # ── Trade journal (persists across restarts, survives even manual MT5 trades) ──
 
@@ -538,6 +612,11 @@ def execute_trade(req: TradeRequest) -> dict:
     if blocked:
         raise HTTPException(403, reason)
 
+    # ── News lockout check (Atlas) ──────────────────────────────────────────
+    lockout_reason = get_active_lockouts([req.symbol]).get(req.symbol)
+    if lockout_reason:
+        raise HTTPException(403, f"Trade rejected: {lockout_reason}")
+
     sym_info = mt5.symbol_info(req.symbol)
     if sym_info is None:
         raise HTTPException(400, f"Symbol {req.symbol} not found in MT5")
@@ -702,6 +781,41 @@ async def run_ai_analysis(auto_execute: bool = False) -> dict:
         for sym, t in technicals.items()
     ) or "No technical history available."
 
+    news = load_news()
+    active_lockouts = get_active_lockouts(WATCHED_SYMBOLS)
+    if news and (news.get("events") or news.get("headline_flags")):
+        age_hours = (datetime.now() - datetime.fromisoformat(news["received_at"])).total_seconds() / 3600
+        staleness = "" if age_hours < 6 else f" ⚠ received {age_hours:.0f}h ago, may be stale"
+
+        event_lines = []
+        now_utc = datetime.now(timezone.utc)
+        for ev in news.get("events", []):
+            ev_time = _parse_utc(ev.get("time_utc"))
+            countdown = f"in {(ev_time - now_utc).total_seconds() / 3600:.1f}h" if ev_time else "time TBD"
+            event_lines.append(
+                f"- {ev.get('event')} ({ev.get('currency')}, impact={ev.get('impact')}) {countdown} "
+                f"— affects {', '.join(ev.get('pairs', []))}"
+            )
+        headline_lines = [
+            f"- [{h.get('severity')}] {h.get('headline')} (affects {', '.join(h.get('affected', []))})"
+            for h in news.get("headline_flags", [])
+        ]
+        lockout_lines = [f"- {sym}: {reason}" for sym, reason in active_lockouts.items()]
+
+        news_block = f"""From Atlas ({news.get('source','Atlas')}, generated {news.get('generated_at','?')}){staleness}
+Risk level: {news.get('risk_level','unknown')} — {news.get('risk_summary','')}
+
+Upcoming scheduled events:
+{chr(10).join(event_lines) or 'None listed'}
+
+Headline flags:
+{chr(10).join(headline_lines) or 'None listed'}
+
+ACTIVE NEWS LOCKOUTS RIGHT NOW (these symbols are hard-blocked from trading by the bridge regardless of what you suggest — do not recommend BUY/SELL for them, HOLD only):
+{chr(10).join(lockout_lines) or 'None active right now'}"""
+    else:
+        news_block = "No news briefing from Atlas available. Trade on price/technicals alone; stay cautious around scheduled economic releases you may not be aware of."
+
     safe_note = (
         "SAFE MODE ACTIVE — all trades will use 0.01 lots regardless of suggestion."
         if RISK_CONFIG["safe_mode"] else
@@ -722,6 +836,15 @@ bias before suggesting BUY or SELL — do not trade against a clear trend/techni
 bias unless RSI shows a genuine reversal setup (oversold in an uptrend pullback,
 overbought in a downtrend rally). If technical bias is NEUTRAL or conflicts with
 the trend, prefer HOLD unless price action strongly justifies otherwise.
+
+NEWS CONTEXT (from Atlas):
+{news_block}
+
+Weigh the news above alongside price/technicals — e.g. avoid fresh entries right
+before or during a scheduled high-impact release (NFP, CPI, central bank
+decisions) mentioned in it, and factor in any sentiment or event it flags for
+the relevant symbols. If it conflicts with the technical bias, say so in your
+rationale rather than silently picking one.
 
 ACCOUNT:
 - Balance: {account['currency']} {account['balance']:,.2f}
@@ -976,6 +1099,25 @@ def journal_sync():
     """Manually re-sync the journal against MT5 history (also runs on startup)."""
     journal_sync_from_history()
     return {"synced": True}
+
+@app.get("/news")
+def news():
+    """Atlas's current structured news/economic-calendar briefing, if any."""
+    return load_news() or {}
+
+@app.post("/news")
+def update_news(payload: dict):
+    """
+    Feed Atlas's structured briefing into Titan. Persists across bridge
+    restarts, is included in every /analyse prompt, and any watched symbol
+    inside an event's lockout window is automatically blocked from trading.
+    """
+    return save_news(payload)
+
+@app.get("/news/lockouts")
+def news_lockouts():
+    """Which watched symbols are currently locked out by an active news event, if any."""
+    return get_active_lockouts(WATCHED_SYMBOLS)
 
 # ── Entry point ────────────────────────────────────────────────────────────────
 
