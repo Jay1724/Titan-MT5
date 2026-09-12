@@ -23,11 +23,20 @@ Starts on http://localhost:8000
 """
 
 import os
+import sys
 import json
 import sqlite3
 from datetime import datetime, date, timezone
 from typing import Optional
 from contextlib import asynccontextmanager, closing
+
+# Some Windows consoles default to a legacy codepage (cp1252) that can't
+# encode the emoji used in status prints below — force UTF-8 regardless.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 
 import MetaTrader5 as mt5
 import anthropic
@@ -886,13 +895,20 @@ Respond ONLY in JSON, no markdown, no preamble:
     try:
         message = ai_client.messages.create(
             model="claude-sonnet-5",
-            max_tokens=2000,
+            max_tokens=8000,
             messages=[{"role": "user", "content": prompt}],
         )
     except anthropic.APIError as e:
         raise HTTPException(502, f"Anthropic API error: {e}")
 
     raw = next((b.text for b in message.content if b.type == "text"), "")
+    if not raw.strip():
+        raise HTTPException(
+            502,
+            f"AI produced no text output (stop_reason={message.stop_reason}) — likely ran out of "
+            "token budget mid-reasoning with a larger prompt. Try again; increase max_tokens further "
+            "if this keeps happening."
+        )
     clean = raw.replace("```json", "").replace("```", "").strip()
     try:
         analysis = json.loads(clean)
